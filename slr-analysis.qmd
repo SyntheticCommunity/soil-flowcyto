@@ -1,0 +1,693 @@
+
+
+# 共现网络的绘制以及相应参数的计算
+
+这里使用slr算法构建网络，slr算法构建网络的方式并非基于相关性构建，在构建网络的时候排除外界条件对网络的影响，因此适合排除干扰来构建网络。
+
+## 加载需要的包
+
+```{r, message=FALSE}
+library(phyloseq)
+library(tidyverse)
+library(SpiecEasi)
+library(ComplexHeatmap)
+library(RColorBrewer)
+library(ggpubr)
+library(igraph)
+library(dplyr)
+library(stringr)
+library(grDevices) 
+library(rgexf) 
+library(Matrix)
+```
+
+## 三种方式构建网络的差异
+
+SparCC 不一定比 SLR/Glasso/MB 差，它们只是适用场景、假设和建模目标不同。
+
+-   SparCC：
+
+    模拟了“谁和谁丰度趋势相似” → 类似生态共现。 合生态解释，比如“哪些菌在环境变化中协同或竞争”。 但受 compositional effect、间接相关影响较大。
+
+-   MB / Glasso：
+
+    是条件独立网络，即排除间接效应，节点之间的边表示“在控制其他变量后仍显著相关”。 适合揭示直接潜在的相互作用（如代谢依赖、信号联系）。 对数据量和正态性要求更高。
+
+-   SLR： 
+
+    在 Glasso 的基础上再去掉“潜在环境或隐变量”的影响。 合多样本、复杂系统中想控制环境/群落层次因素的分析。 更复杂，估计不稳定，参数选择困难。
+
+各方法在微生物网络中的典型用途：
+
+| 应用目的 | 推荐方法 | 说明 |
+|-----------------------|------------------------|-------------------------|
+| 描述共现趋势、做生态解释 | **SparCC / SPIEC-EASI-MB** | SparCC 可视化友好，解释直观 |
+| 构建“条件独立”网络 | **MB / Glasso** | 反映更直接的菌间关系 |
+| 控制环境/潜在变量影响 | **SLR** | 适合实验多因子、多组样本 |
+| 拓扑结构比较 | **SparCC 或 MB** | 一般都可以，只要一致即可 |
+| 变量驱动机制验证 | **SLR 或 SEM** | 检验哪些环境变量主导网络结构 |
+
+我们的研究关注：“初始细胞数 → 群落结构变化 → 功能变化 
+
+- SparCC 网络： 构建生态共现网络，描述群落协同模式变化（低密→高密）。 用拓扑指标（modularity、clustering、degree 等）分析环境响应 
+- SLR 网络： 控制潜在因子（如 pH、DO、细胞密度等），提取“纯粹的”菌间条件独立关系。 验证环境变量对网络结构变化的贡献。
+
+### 加载数据集
+
+```{r}
+physeq = readRDS("./data/dada2/microplate/filtered/physeq.rds") #读取
+physeq
+```
+
+
+```{r}
+rename_asv <- function(physeq, prefix="ASV"){
+  new_names <- paste0(prefix, seq_len(ntaxa(physeq)))
+  taxa_names(physeq) <- new_names
+  physeq}
+
+# 用法
+physeq<- rename_asv(physeq, prefix="ASV")
+```
+
+
+
+## 构建互作网络
+
+### 数据集清洗
+
+保险起见去丰度为0的ASV避免影响后续的网络构建以及分析。
+
+```{r}
+ps_final <- prune_taxa(taxa_sums(physeq) > 0, physeq)
+```
+
+### SLR方法构建网络
+
+```{r}
+se.slr.amgut <- spiec.easi(ps_final, method='slr', r=10, lambda.min.ratio=1e-4,
+                           nlambda=50, pulsar.params=list(rep.num=50, ncores=1))
+```
+
+
+```{r}
+saveRDS(se.slr.amgut, file = "./data/slr_gsea/se.slr.amgut.rds")
+```
+
+
+```{r}
+se.slr.amgut <- readRDS("./data/slr_gsea/se.slr.amgut.rds")
+```
+
+### 提取潜在变量
+
+```{r}
+# 提取slr方法分离出的“低秩”成分（即潜在变量效应）
+X <- se.slr.amgut$est$data
+L <- se.slr.amgut$est$resid[[getOptInd(se.slr.amgut)]]
+
+# 用PCA方法对这些效应进行分析和可视化
+pca <- robustPCA(X, L)
+
+# 检查这些潜在变量效应是否与已知的样本信息（元数据）相关
+known_vars = sample_data(ps_final) |> as_tibble() |> select(!contains("id")) |> colnames()
+known_vars_cor = lapply(known_vars, function(var){
+  value = sample_data(ps_final)[[var]]
+  if (!is.numeric(value)){
+    value = as_factor(value) |> as.numeric()
+  }
+  cor(value, pca$scores, use = "pairwise", method = "kendall")
+})
+
+names(known_vars_cor) = known_vars
+known_vars_cor
+```
+
+### 潜变量数值矩阵理解
+
+#### 核心发现: PC5 是初始细胞数的最佳指示因子
+
+**数据证据:**
+
+- `$cell_num` 相关性: PC1: 0.247; PC2: 0.349; PC3: 0.362; PC4: -0.350; **PC5: 0.460** (最大值)
+- PC5 与初始细胞数的相关性最高 (0.46),是捕捉"初始细胞数量梯度效应"的最佳指标
+
+**对比其他环境因子:**
+
+- `$growth`(生长情况): 相关性极低(≤0.05)
+- `$biofilm`(生物膜): 相关性极低(≤0.06)  
+- `$carbon`(碳源): 相关性较低(最高仅-0.14)
+
+**结论:** PC5 专门且特异性地响应"初始细胞数量",几乎不受生长状态或生物膜产量的干扰。
+
+---
+
+#### 为什么必须选择 PC5?(数据铁证)
+
+**各 PC 与细胞数的相关系数绝对值对比:**
+
+| PC编号 | 相关系数绝对值 | 说明 |
+|--------|---------------|------|
+| PC1 | 0.247 | 较弱 |
+| PC2 | 0.349 | 中等 |
+| PC3 | 0.362 | 中等 |
+| PC4 | 0.351 | 中等 |
+| **PC5** | **0.460** | **最强(峰值)** |
+| PC6 | 0.099 | 断崖式下跌 |
+
+**解读:** 
+
+虽然 PC2、PC3、PC4 也都受到初始细胞数的影响(都在0.35左右),但 PC5 (0.46) 信号最强、最突出。这就好比在嘈杂的房间里,PC5 是那个声音最大、最清晰喊出"我是由细胞密度决定的!"的人。**选 PC5 作为主分析轴,在统计学上是绝对站得住脚的。**
+
+---
+
+#### 其他环境因子为何是"噪音"?
+
+**其他因子与 PC 的相关性上限:**
+
+| 环境因子 | 最大相关系数 | 对应PC | 
+|---------|-------------|--------|
+| Carbon | -0.14 | PC9 |
+| Growth | -0.059 | PC1 |
+| Biofilm | 0.067 | PC6 |
+| Class | -0.053 | PC9 |
+
+**重要发现:** 
+
+在 SLR 降维结果中,**只有 `cell_num` 是真正的强驱动因子**。其他因子(生长速度、生物膜、碳源类型)在这个尺度上并没有表现出强的线性规律。
+
+**论文意义:** 
+
+你的故事非常纯粹——**"这就是一个关于初始接种密度(Density-Dependent)的故事,不受生长状态或生物膜形成的干扰。"**
+
+---
+
+#### 概念澄清: "主成分" vs "潜在变量"
+
+**PCA (主成分分析):**
+
+- 产出: Principal Components (PCs)
+- 特点: 纯数学计算,只看方差大小
+- 性质: 无监督,不知道分组信息(Carbon, Cell_Num)
+
+**SLR (稀疏潜在回归):**
+
+- 产出: Latent Variables/Components (潜在变量/成分)
+- 特点: 假设群落变化由背后看不见的(Latent)驱动力控制
+- 性质: 虽然代码中习惯称"PC",但数学意义上是**潜在变量**
+
+**结论:** 
+
+你的"PC5"准确来说是 **"Latent Component 5"(潜在成分5)**。
+
+---
+
+#### 为什么不用解释率最高的 PC1/PC2?
+
+**常见误区:** "解释率高 = 重要"
+
+**事实:** 解释率高 = 影响范围广/差异巨大,但**"影响大"未必是你想研究的因素**。
+
+**类比说明:**
+
+假设分析"全班同学的身体数据":
+
+| 成分 | 解释率 | 代表含义 | 研究价值 |
+|------|--------|---------|---------|
+| PC1 | 60% | 年龄/身高 | 能看出按年级分组,但与近视无关 |
+| PC2 | 20% | 性别 | 男女差异,但与近视无关 |
+| **PC5** | **5%** | **是否近视** | **差异虽小,但正是研究目标!** |
+
+**研究目标:** "研究近视对身体数据的影响"
+
+- 分析 PC1 → 只能得出"年龄大的人个子高",与近视无关
+- 分析 PC5 → 发现"近视的人在这个维度上有特定特征"
+
+**关键结论:**
+
+虽然 PC5 解释率只有5%,但它是**唯一一个与"初始细胞数"(Cell Num)强相关的维度**。这才是我们要研究的核心变量!
+
+
+
+```{r}
+cor_mat <- do.call(rbind, known_vars_cor)
+rownames(cor_mat) <- names(known_vars_cor)
+colnames(cor_mat) <- paste0("PC", 1:ncol(cor_mat))
+
+pheatmap::pheatmap(
+  cor_mat, 
+  cluster_rows = FALSE, 
+  cluster_cols = FALSE, 
+  angle_col = 0)
+```
+
+### 基于稀疏潜在回归（SLR）的密度依赖性验证
+
+1. 为什么要进行这个分析？（Rationale & Principle）
+
+从“整体”到“机制”的聚焦： 虽然我们通过相关性热图（Heatmap）初步发现了PC5（LatentComponent5）与初始细胞数（cell_num）有极强的整体相关性（Kendall's tau = 0.46），但这只是一个总体的统计数字。我们需要进一步验证这种相关性是否在每一种碳源环境下都稳健存在。
+
+验证“密度效应”的普遍性： 如果不拆分碳源看，有可能这个趋势只在某一种特定的碳源（比如葡萄糖）里存在，而在其他碳源里不存在。通过循环绘制每种碳源的回归图，我们可以检验：初始细胞密度对群落结构的驱动作用，是否是一个跨环境的普遍规律（General Rule）？
+
+数学原理：
+Y轴（Latent Effect / PC5 Scores）：代表了通过 SLR 降维提取出的、去除了噪音后的群落结构特征值。
+X轴（Initial Cell Num）：代表实验处理梯度。
+
+Kendall 相关性检验：由于细胞数（10, 50, 100, 250）并非严格的连续正态分布数据，使用非参数的 Kendall 相关系数能更严谨地评估“单调趋势”（即：细胞数越多，PC5 数值是否单向增加/减少）。
+
+2. 图表说明了什么？（Interpretation of Results）
+
+强烈的线性/单调响应： 如果在绝大多数碳源的图中，你都观察到了显著的值（p<0.05）和较高的R值（相关系数），且回归线呈现明显的上升或下降趋势，这说明：群落结构（PC5）随着初始接种密度的增加发生了有规律的定向偏移。
+
+低接种量 vs. 高接种量的分异： 图中的散点颜色（10, 50, 100, 250）分层明显（例如红色点和紫色点在 Y 轴上拉得很开），直观地展示了**“历史依赖性”（PriorityEffect）或“阿利效应”（AlleeEffect）**在群落构建中的作用——起始条件的微小差异（细胞数），最终被放大成了群落结构的巨大差异（PC5得分）。
+碳源间的异质性（如果存在）： 如果在某些难利用的碳源中相关性变弱（斜率变平），而在易利用碳源中相关性极强，这提示了**“资源有效性调节了密度依赖强度”**这一深层生态学机制。
+
+3. 对你的结论有什么用？（Significance & Conclusion）
+
+这段分析是支撑你核心论点——“初始细胞密度是微生物群落组装的关键决定因素”——的最有力证据。
+
+它在论文逻辑链条中的作用如下：
+
+排除干扰，锁定信号： 证明了 PC5 不是随机噪音，而是真实反映密度梯度的生物学信号。
+
+```{r}
+# 1. 读取配色文件
+my_saved_colors <- readRDS("./data/dada2/microplate/factor_colors.rds")
+
+# 2. 数据准备
+plot_data <- data.frame(
+  SampleID = sample_names(ps_final),
+  Latent_Effect = pca$scores[, 5], 
+  Carbon = sample_data(ps_final)$carbon,
+  # 确保这里转为因子，以便和颜色列表的 names 对应
+  Initial_Cell_Num = as.factor(sample_data(ps_final)$cell_num)
+)
+
+carbon_list <- unique(plot_data$Carbon)
+plot_list <- list()
+
+# 3. 循环绘图
+for (carb in carbon_list) {
+  
+  sub_data <- subset(plot_data, Carbon == carb)
+  
+  p <- ggplot(sub_data, aes(x = Initial_Cell_Num, y = Latent_Effect)) +
+    geom_point(aes(color = Initial_Cell_Num), size = 4, alpha = 0.8) + 
+    geom_smooth(method = "lm", aes(group = 1), color = "black", linetype = "dashed", se = TRUE) + 
+    
+    # --- 【在这里加入自定义颜色】 ---
+    # 直接调用 saved_colors 里的 cell 颜色向量
+    scale_color_manual(values = my_saved_colors$cell) +
+    # -----------------------------
+
+    scale_x_discrete(expand = expansion(mult = c(0.1, 0.1))) + 
+    theme_bw() +
+    labs(
+      x = NULL, 
+      y = "",
+      subtitle = carb # 加上副标题区分碳源
+    ) +
+    stat_cor(aes(group = 1), method = "kendall", 
+             label.x.npc = "left", label.y.npc = "top", 
+             vjust = 1.5, hjust = 0) +
+    theme(
+      legend.position = "none" 
+    )
+  
+  plot_list[[carb]] <- p
+}
+
+# 4. 拼图
+cowplot::plot_grid(plotlist = plot_list, labels = "auto")
+```
+
+### 初始细胞数量的富集物种
+
+从部分的结果与之前面的物种折线图想呼应，通过GSEA分析确定细胞数量的影响以，网络分析再次证明细胞数量的影响，以及物种在不同细胞数量的主导作用。
+
+分析解读：密度依赖性群落构建的分类学驱动因子
+
+1. 为什么使用这个分析？（Rationale）
+从“现象”深入到“物种”： 前一步的分析已经确立了 PC5 是响应初始细胞密度的主轴。但是，PC5 只是一个抽象的数学数值。如果不找出构成 PC5 的具体物种，你的结论就只能停留在“群落结构变了”，而无法回答**“到底是谁变了？”以及“是谁导致了这种变化？”**。
+
+寻找指示物种 (Biomarkers)： 我们需要明确界定哪些物种是**“高密度偏好型”（High-density specialists），哪些是“低密度偏好型”**（Low-density specialists）。这个分析通过提取 Loadings 的两极（Top 5 正负），精准定位了这两类截然不同的生态功能群。
+
+2. 原理是什么？（Principle）
+
+Loadings（载荷）的生物学含义： 在 SpiecEasi/PCA 分析中，Loadings 代表了每个变量（ASV）对潜在成分（PC5）的贡献度。
+数值大小（绝对值）：代表贡献的权重。Loading 绝对值越大，说明该 ASV 与 PC5 的变化越同步，受密度影响越剧烈。
+
+符号方向 (+/-)：
+正值 (+, >0)：由于 PC5 与 Cell Num 正相关（假设之前的相关性是正的），Loading 为正的菌代表在高密度接种下富集的物种。
+负值 (-, <0)：Loading 为负的菌代表在低密度接种下富集（或在高密度下被抑制）的物种。
+
+3. 说明了什么问题？（Interpretation of Results）
+
+存在截然不同的生态策略： 图表将清晰地展示两组完全不同的菌群。这说明微生物群落中存在明显的分化：一组菌擅长在拥挤、高竞争的环境（High Density）中利用“群体效应”或耐受竞争而繁荣；另一组菌则擅长在稀疏、低竞争的环境（LowDensity）中作为“先锋物种”快速抢占生态位。
+
+优势菌的更替： 这解释了为什么群落结构会随密度变化——不是因为所有菌都一起变多或变少，而是因为特定的优势菌发生了更替。例如，可能某种 Pseudomonas 是低密度王者，而某种 Klebisella 是高密度霸主。
+
+4. 对你的结论有什么用？（Significance）
+
+这个图是你文章**机制讨论（Mechanism Discussion）**的核心支柱：
+
+具体化结论： 你不再空谈“密度效应”，而是可以指名道姓地说：“密度效应主要是由A菌的减少和B菌的增加驱动的。”这让文章的颗粒度更细，说服力更强。
+
+揭示相互作用机制： 如果 High Density 组的菌通常被认为是产生抑菌物质的菌，或者利用群体感应（Quorum Sensing）的菌，你就可以大胆推测：“高密度下的群落构建可能受到了群体感应机制的调控。”
+
+设想的应用价值：这些 Top ASV 可以作为潜在的生物标记物（Biomarkers）。在未来的合成群落构建中，如果想设计一个耐受高密度的体系，就应该优先选择 High Density 组的菌。
+
+```{r}
+
+# ================= 1. 数据准备 (标准流程) =================
+# 1.1 提取 PC5 Loadings
+pc5_loadings <- pca$loadings[5, ] 
+
+# 1.2 构建基础数据框
+drivers_df <- data.frame(
+  ASV_ID = taxa_names(ps_final), 
+  Loading = pc5_loadings
+)
+
+# 1.3 关联分类信息 & 处理 NA
+tax_table_df <- as.data.frame(tax_table(ps_final))
+tax_table_df$ASV_ID <- rownames(tax_table_df)
+tax_table_df$Genus <- as.character(tax_table_df$Genus)
+
+# 将 NA 替换为 "Unclassified"
+tax_table_df$Genus[is.na(tax_table_df$Genus)] <- "Unclassified"
+
+# 合并
+full_drivers <- left_join(drivers_df, tax_table_df, by = "ASV_ID")
+
+# 生成标签: "属名 (ASV_ID)"
+full_drivers$Label <- paste0(full_drivers$Genus, " (", full_drivers$ASV_ID, ")")
+
+# ================= 2. 【核心修改】分别筛选两端的 Top 5 =================
+
+# 2.1 提取正相关前 5 (High Density, Loading 最正)
+top_5_high <- full_drivers %>%
+  filter(Loading > 0) %>%
+  arrange(desc(Loading)) %>% # 从大到小排序
+  head(5)
+
+# 2.2 提取负相关前 5 (Low Density, Loading 最负)
+top_5_low <- full_drivers %>%
+  filter(Loading < 0) %>%
+  arrange(Loading) %>%       # 从小到大排序 (例如 -0.9 在 -0.1 前面)
+  head(5)
+
+# 2.3 合并两组数据
+plot_data_balanced <- bind_rows(top_5_high, top_5_low)
+
+# (可选) 打印名单检查
+print("=== High Density Top 5 ===")
+print(top_5_high[, c("Label", "Loading")])
+print("=== Low Density Top 5 ===")
+print(top_5_low[, c("Label", "Loading")])
+
+# ================= 3. 绘图 (对称蝴蝶图) =================
+p_balanced <- ggplot(plot_data_balanced, aes(x = reorder(Label, Loading), y = Loading, fill = Loading > 0)) +
+  geom_bar(stat = "identity", width = 0.6, color = "black", size = 0.3) +
+  
+  # 翻转坐标轴
+  coord_flip() +
+  
+  # 颜色设置 (红正蓝负)
+  scale_fill_manual(
+    values = c("TRUE" = "#B2182B", "FALSE" = "#2166AC"), 
+    labels = c("Low Density Associated", "High Density Associated"),
+    name = "Ecological Niche"
+  ) +
+  
+  # 标题与标签
+  labs(title = "Top 5 ASVs for Each Density Strategy",
+       subtitle = "Comparing the strongest indicators for Low vs. High Initial Density",
+       x = "Taxonomy (ASV ID)", 
+       y = "Loading Score (Contribution to PC5)") +
+  
+  theme_bw() +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
+    axis.text.y = element_text(size = 11, face = "italic", color = "black"), 
+    legend.position = "top",
+    panel.grid.minor = element_blank()
+  )
+
+print(p_balanced)
+```
+
+## 基于SLR算法的网络可视化
+
+### 网络的构建
+
+
+```{r}
+#' 聚合低丰度OTU为"other"类群
+#'
+#' 保留丰度最高的 n 个OTU，将其余所有OTU在指定的分类级别上标记为"other"，
+#' 然后将这些"other" OTU聚合为一个新的类群。
+#'
+#' @param physeq 一个 phyloseq 对象。
+#' @param n 要单独保留的丰度最高的OTU数量。
+#' @param taxrank 字符串，要进行标记和聚合的分类级别, 默认为 "Genus"。
+#' @param other_label 字符串，用于低丰度类群的标签，默认为 "other"。
+#'
+#' @return 一个新的 phyloseq 对象，其中低丰度OTU已被聚合成"other"类群。
+#'
+group_low_abundance_taxa <- function(ps_final, n = 10, taxrank = "Genus", other_label = "other") {
+  
+  # 1. 识别 top n 和其他的 OTU
+  otu_sums <- taxa_sums(ps_final)
+  top_taxa_names <- names(sort(otu_sums, decreasing = TRUE)[1:min(n, ntaxa(ps_final))])
+  other_taxa_names <- taxa_names(ps_final)[!taxa_names(ps_final) %in% top_taxa_names]
+  
+  # 2. 修改物种注释表
+  physeq_mod <- ps_final
+  tt <- as(tax_table(physeq_mod), "matrix")
+  
+  # 在指定级别上标记为 "other"
+  tt[other_taxa_names, taxrank] <- other_label
+  
+  tax_table(physeq_mod) <- tax_table(tt)
+  
+  return(physeq_mod)
+}
+
+# --- 使用示例 ---
+# 保留前50个OTU，其余的在Genus级别上合并为"other"
+ps_grouped <- group_low_abundance_taxa(ps_final, n = 15, taxrank = "Genus")
+
+# 查看结果
+print(ps_grouped)
+```
+
+### 未经过滤的网络结果
+
+```{r}
+# 1. 读取颜色 (假设文件里的顺序已经是：Top1 -> Top2 -> ... -> Other)
+genus_colors <- readRDS("./data/dada2/microplate/top10_genus_colors.rds")
+
+# 直接提取名字，作为图例的顺序
+legend_order <- names(genus_colors) 
+tax_mat <- as(tax_table(ps_grouped), "matrix")
+tax_mat[,"Genus"] <- ifelse(tax_mat[,"Genus"] %in% legend_order, tax_mat[,"Genus"], "Other")
+tax_table(ps_grouped) <- tax_table(tax_mat)
+
+vertex_attr <- data.frame(tax_table(ps_grouped)) |> tibble::rownames_to_column("name")
+ig2.mb <- adj2igraph(getRefit(se.slr.amgut), vertex.attr = vertex_attr)
+
+# 4. 绘图
+plot_network(ig2.mb, ps_grouped, type = 'taxa', color = "Genus") +
+  scale_color_manual(values = genus_colors, breaks = legend_order) +
+  geom_point(size = 3) +
+  theme_void() +
+  theme(legend.position = "right")
+```
+
+```{r}
+# 1. 读取颜色与顺序
+genus_colors <- readRDS("./data/dada2/microplate/top10_genus_colors.rds")
+legend_order <- names(genus_colors) # 提取顺序 (Top -> ... -> Other)
+
+tax_mat <- as(tax_table(ps_grouped), "matrix")
+tax_mat[,"Genus"] <- ifelse(tax_mat[,"Genus"] %in% legend_order, tax_mat[,"Genus"], "Other")
+tax_table(ps_grouped) <- tax_table(tax_mat)
+
+
+vertex_attr <- data.frame(tax_table(ps_grouped)) |> tibble::rownames_to_column("name")
+ig2.mb <- adj2igraph(getRefit(se.slr.amgut), vertex.attr = vertex_attr)
+
+plot_network(ig2.mb, ps_grouped, type = 'taxa', color = "Genus", point_size = 4) + 
+  scale_color_manual(values = genus_colors, breaks = legend_order) + 
+  theme_void() +
+  theme(legend.position = "right")
+```
+
+
+
+### 对网络节点的过滤（去除非主网络的节点）
+
+网络绘制的节点，虽有一些节点并非孤立，但并不在主网络中，可能会影响后续的分析结果因此这些在可视化上应该剔除（若不进行后续的zipi分析则可以保留）
+
+```{r}
+library(igraph)
+
+# 1. 重新计算度 (确保使用 igraph 的函数)
+# 使用 V(ig2.mb) 确保基于当前图的对象
+V(ig2.mb)$degree <- igraph::degree(ig2.mb)
+
+# 2. 【最安全的方法】直接在原图上删除度为 0 的节点
+# 逻辑：找出度等于0的节点 -> 删掉它们
+# 这样剩下的自然就是有连线的，且原有连线绝对不会断
+ig_connected_safe <- delete_vertices(ig2.mb, V(ig2.mb)[degree < 2])
+
+# 3. 绘图验证
+plot_network(ig_connected_safe, ps_grouped, type='taxa', color="Genus", layout.method = layout.grid) +
+  scale_color_brewer(palette = "Paired") +
+  labs(title = "Safe Network Plot", subtitle = "Removed nodes with degree=0 directly")
+```
+
+```{r}
+# 1. 筛选节点 (保持你原本的逻辑)
+V(ig2.mb)$degree <- igraph::degree(ig2.mb)
+ig_connected_safe <- delete_vertices(ig2.mb, V(ig2.mb)[degree < 2])
+
+# 2. 绘图 (修改配色)
+plot_network(ig_connected_safe, ps_grouped, type = 'taxa', color = "Genus", point_size = 4, layout.method = layout.grid
+) +
+  scale_color_manual(values = genus_colors, breaks = names(genus_colors)) + 
+  labs(title = "Safe Network Plot", subtitle = "Removed nodes with degree < 2") +
+  theme_void() +
+  theme(legend.position = "right")
+```
+
+
+
+### Gephi 可视化文件构建
+
+这里根据之前的过滤结果构建文件，在构建文件中加入模块化计算(Gephi自带模块化的计算，单算法单一，且不能设置随机种子结果无法可重复)，加入设定的分组信息，物种注释，高低细胞数量富集物种等信息方便绘制Gephi可视化。
+
+
+```{r}
+g <- ig_connected_safe 
+
+# ================= 0. 准备配色信息 =================
+genus_colors <- readRDS("./data/dada2/microplate/top10_genus_colors.rds")
+if (!"Other" %in% names(genus_colors)) {
+  genus_colors <- c(genus_colors, "Other" = "#DDDDDD") 
+}
+
+
+# ================= 1. 【终极致敬】提取 SLR 算法原生的正负权重与粗细 =================
+vertex_attr <- data.frame(tax_table(ps_grouped)) |> tibble::rownames_to_column("name")
+refit_net <- as.matrix(getRefit(se.slr.amgut))
+opt_ind <- getOptInd(se.slr.amgut)
+raw_icov <- se.slr.amgut$est$icov[[opt_ind]]
+dense_icov <- as.matrix(raw_icov)
+native_weight_mat <- -cov2cor(dense_icov)
+diag(native_weight_mat) <- 0 # 去除对角线的自我相关
+weighted_mat <- refit_net * native_weight_mat
+ig2.mb <- adj2igraph(weighted_mat, vertex.attr = vertex_attr)
+V(ig2.mb)$degree <- igraph::degree(ig2.mb)
+g <- delete_vertices(ig2.mb, V(ig2.mb)[degree < 2])
+# ================= 2. 修复权重报错 =================
+if(!is.null(E(g)$weight)) {
+  E(g)$thickness   <- abs(E(g)$weight)
+  E(g)$interaction <- ifelse(E(g)$weight > 0, "Positive", "Negative")
+  g <- delete_edge_attr(g, "weight")
+}
+# ================= 2.5 计算每个节点的正负连线数量 =================
+# 逻辑：把网络拆成“纯正网络”和“纯负网络”，分别数连线，再把数字存回主网络
+g_pos <- subgraph_from_edges(g, E(g)[interaction == "Positive"], delete.vertices = FALSE)
+g_neg <- subgraph_from_edges(g, E(g)[interaction == "Negative"], delete.vertices = FALSE)
+
+V(g)$Degree_Total    <- igraph::degree(g)
+V(g)$Degree_Positive <- igraph::degree(g_pos)
+V(g)$Degree_Negative <- igraph::degree(g_neg)
+#正负比率 (防止分母为0，加个极小值)
+V(g)$Pos_Neg_Ratio   <- V(g)$Degree_Positive / (V(g)$Degree_Negative + 0.001)
+
+# ================= 3. PC5 映射 =================
+raw_vals <- as.numeric(pca$loadings[5, ])
+names(raw_vals) <- taxa_names(ps_final)
+net_names_clean <- V(g)$name %>% str_remove("^X\\.") %>% str_remove("^X")
+matched_scores <- raw_vals[net_names_clean]
+
+if (all(is.na(matched_scores))) {
+  stop("错误：所有节点的 PC5 分数都未能匹配！")
+} else {
+  message("成功匹配到 PC5 数据的节点数: ", sum(!is.na(matched_scores)))
+}
+
+# ================= 4. 写入属性 (数据准备) =================
+# --- 4.1 基础属性 ---
+V(g)$PC5_Score <- matched_scores
+V(g)$Density_Class <- case_when(
+  matched_scores > 0 ~ "High_Density",
+  matched_scores < 0 ~ "Low_Density",
+  TRUE ~ "Neutral"
+)
+
+# --- 4.2 模块化 ---
+set.seed(123) 
+use_weight <- if(!is.null(E(g)$thickness)) E(g)$thickness else NULL
+wt_c <- cluster_louvain(g, weights = use_weight)
+V(g)$module <- as.numeric(membership(wt_c)) 
+
+# --- 4.3 物种信息 ---
+tax <- as.data.frame(tax_table(ps_final))
+V(g)$Phylum <- as.character(tax[net_names_clean, "Phylum"])
+V(g)$Genus  <- as.character(tax[net_names_clean, "Genus"])
+V(g)$Label  <- V(g)$name
+
+# --- 4.4 颜色映射 (HEX) ---
+matched_hex <- genus_colors[V(g)$Genus]
+matched_hex[is.na(matched_hex)] <- genus_colors["Other"]
+V(g)$color_hex <- matched_hex # 存入 HEX 以便后续使用
+
+
+# ================= 5. 【核心修改】导出为 GEXF (包含节点数据+颜色+边属性) =================
+
+# A. 提取所有节点数据 (包含 PC5, module, Genus 等)
+node_data_df <- igraph::as_data_frame(g, what = "vertices")
+
+# B. 准备 Gephi 视觉颜色 (RGB + Alpha透明度)
+rgb_mat <- t(col2rgb(node_data_df$color_hex))
+viz_color <- cbind(rgb_mat, a = 1.0) 
+
+# C. 准备节点大小 
+viz_size <- rep(20, vcount(g)) 
+
+# D. 【新增】提取所有边数据及属性
+edge_data_df <- igraph::as_data_frame(g, what = "edges")
+# 剥离出 from 和 to，剩下的就是边属性 (interaction, thickness 等)
+edge_attr_df <- edge_data_df[, !(colnames(edge_data_df) %in% c("from", "to")), drop = FALSE]
+
+# E. 导出文件
+write.gexf(
+  nodes = data.frame(id = V(g)$name, label = V(g)$Label), 
+  edges = edge_data_df[, c("from", "to")], 
+  
+  # 【关键修改 1】直接将 thickness 映射为 Gephi 的默认边权重 (Weight)
+  edgesWeight = edge_data_df$thickness, 
+  
+  # 【关键修改 2】nodesAtt 保留节点属性
+  nodesAtt = node_data_df, 
+  
+  # 【关键修改 3】edgesAtt 传入边属性，保证 Positive/Negative 成功导入
+  edgesAtt = edge_attr_df, 
+  
+  nodesVizAtt = list(
+    color = viz_color, 
+    size = viz_size
+  ),
+  
+  output = "network_perfect_color.gexf"
+)
+
+message("导出成功！请在 Gephi 中打开 'network_perfec1_color.gexf'。")
+message("1. 节点颜色会自动显示。")
+message("2. 边的粗细已自动映射为 Gephi 的权重 (Weight)。")
+```
+

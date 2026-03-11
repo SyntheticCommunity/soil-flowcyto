@@ -1,0 +1,244 @@
+
+# picrust2 预测
+
+解析功能预测结果，并基于两种细菌通路差异，探讨假单胞菌在低细胞数条件下占主导地位的现象。
+
+
+## 加载必要的包
+
+```{r}
+library(ggVennDiagram)
+library(tidyverse)
+library(dunn.test)
+library(multcompView)
+library(cowplot)
+library(grid)
+library(rstatix)
+library(RColorBrewer)
+library(pheatmap)
+library(circlize)  
+library(ComplexHeatmap)
+theme_set(theme_bw())
+```
+
+## 增加的初始细胞数增强群落功能
+
+### 通路差异分析方法
+
+对预测的通路进行差异分析，通过对每列进行归一化处理来显示差异。以不同碳源为例展示相同碳源下不同细胞数的通路差异。
+
+```{r}
+# Read data
+kegg_data <- read_delim("./data/keggrest/annotated_kegg_abundance_cleanL2.tsv", delim = "\t")
+metadata <- read_csv("./data/sample_metadata.csv", col_types = "ccccddc")
+
+# ========== 2. 相对丰度转换 ==========
+# Note: The tsv is already in percentages, but if needed, confirm colSums ~100
+sample_cols <- setdiff(colnames(kegg_data), c("L2", "L1"))
+# If not already relative, uncomment below:
+# kegg_relative <- kegg_data
+# kegg_relative[sample_cols] <- sweep(kegg_data[sample_cols], 2, colSums(kegg_data[sample_cols], na.rm=TRUE), FUN = "/") * 100
+kegg_relative <- kegg_data # Assuming already relative
+# ========== 3. 转成长表，并合并 metadata ==========
+kegg_long <- kegg_relative %>%
+  pivot_longer(cols = all_of(sample_cols), names_to = "sample", values_to = "expression")
+merged_data <- inner_join(kegg_long, metadata, by = c("sample" = "sampleID")) %>%
+  mutate(cell_num = as.character(cell_num)) %>%
+  distinct()
+# ========== 7. 准备绘图数据 ==========
+# 先按 L1 和 L2 排序所有数据，确保全局一致顺序
+sorted_paths <- merged_data %>%
+  select(L1, L2) %>%
+  distinct() %>%
+  arrange(L1, L2) # 按 L1 分组排序 L2
+data_for_plot <- merged_data %>%
+  mutate(
+    L2 = factor(L2, levels = unique(sorted_paths$L2)), # 使用全局排序
+    cell_num_factor = factor(cell_num, levels = c("10", "50", "100", "250")),
+    L1 = gsub(" ", "\n", L1)
+  ) %>%
+  ungroup()
+```
+
+### 气泡图可视化通路的差异
+
+```{r}
+stat_res <- data_for_plot %>%
+  group_by(carbon, L2) %>%
+  rstatix::kruskal_test(expression ~ cell_num) %>%
+  mutate(padj = p.adjust(p, method = "fdr")) %>%
+  dplyr::filter(padj < 0.05) %>%  # 筛选显著通路
+  arrange(carbon, padj)
+
+
+# 1. 筛选并聚合数据
+bubble_data <- data_for_plot %>%
+  filter(L2 %in% unique(stat_res$L2)) %>%
+  group_by(carbon, L2, cell_num) %>%
+  summarise(mean_abd = mean(expression, na.rm = TRUE), .groups = "drop") %>%
+  # 计算 Z-score
+  group_by(carbon, L2) %>%
+  mutate(z_score = scale(mean_abd)) %>%
+  ungroup()
+
+# ========== 2. 【核心修复】指定 X 轴顺序 ==========
+bubble_data$cell_num <- factor(as.character(bubble_data$cell_num), 
+                               levels = c("10", "50", "100", "250"))
+
+
+# 如果显著通路太多，建议取前20-30个，否则Y轴会挤在一起
+# top_pathways <- stat_res %>% group_by(carbon) %>% slice_head(n = 20) %>% pull(L2)
+# bubble_data <- bubble_data %>% filter(L2 %in% top_pathways)
+
+
+# 1. 筛选并聚合数据
+bubble_data <- data_for_plot %>%
+  filter(L2 %in% unique(stat_res$L2)) %>%
+  group_by(carbon, L2, cell_num) %>%
+  summarise(mean_abd = mean(expression, na.rm = TRUE), .groups = "drop") %>%
+  # 计算 Z-score
+  group_by(carbon, L2) %>%
+  mutate(z_score = scale(mean_abd)) %>%
+  ungroup()
+
+# ========== 2. 【核心修复】指定 X 轴顺序 ==========
+bubble_data$cell_num <- factor(as.character(bubble_data$cell_num), 
+                               levels = c("10", "50", "100", "250"))
+
+
+
+p <- ggplot(bubble_data, aes(x = cell_num, y = L2)) +
+  # --- 气泡层 ---
+  geom_point(aes(size = mean_abd, color = z_score)) +
+  
+  # --- 颜色梯度 ---
+  scale_color_gradient2(low = "navy", mid = "white", high = "firebrick", midpoint = 0) +
+  
+  # --- 气泡大小 ---
+  scale_size(range = c(1, 4), name = "Abundance (%)") + # 稍微调大了范围，看得更清楚
+  
+  # --- 分面 ---
+  facet_grid(~ carbon, scales = "free", space = "free") +
+  
+  # --- 主题 ---
+  theme_bw() +
+  labs(
+    x = "Initial Cell Number",
+    y = "Significantly Enriched Pathways (L2)",
+    color = "Z-score (Relative)",
+    title = "Metabolic Pathway Enrichment"
+  ) +
+  theme(
+    axis.text.x = element_text(color = "black", size = 8),
+    axis.text.y = element_text(color = "black", size = 8),
+    panel.grid.minor = element_blank(),
+  )
+
+p
+
+#graph2pdf(p, file = "picrust2.pdf", width = 8, height =10 )
+```
+### 热图可视化通路的差异
+
+```{r}
+# Custom colors for L1 (expanded to all categories in data)
+custom_l1_colors <- c(
+  "Cellular Processes" = "#984EA3", # purple
+  "Environmental Information Processing" = "#4DAF4A", # green
+  "Genetic Information Processing" = "#377EB8", # blue
+  "Human Diseases" = "#E31A1C", # red
+  "Metabolism" = "#FF7F00", # orange
+  "Organismal Systems" = "#33A02C" # dark green
+)
+# ========== 8. 画图 ==========
+unique_carbons <- unique(data_for_plot$carbon)
+plot_list <- list() # 收集热图
+for (carb in unique_carbons) {
+  data_sub <- data_for_plot %>%
+    filter(carbon == carb) %>%
+    mutate(L2 = droplevels(L2)) # Drop unused levels
+  # 计算均值
+  summary_data <- data_sub %>%
+    group_by(L1, L2, cell_num_factor) %>%
+    summarise(mean_expr = mean(expression, na.rm = TRUE), .groups = "drop")
+  # 准备热图矩阵：行是L2，列是cell_num_factor，值是mean_expr，按 L1, L2 排序
+  heat_matrix <- summary_data %>%
+    arrange(L1, L2) %>%
+    pivot_wider(names_from = cell_num_factor, values_from = mean_expr) %>%
+    column_to_rownames(var = "L2") %>%
+    select(-L1) %>%
+    as.matrix()
+  # Per-row normalization to 0-1 for better distinction within each pathway
+  heat_matrix_norm <- t(apply(heat_matrix, 1, function(x) {
+    rng <- range(x, na.rm = TRUE)
+    if (diff(rng) == 0) {
+      rep(0.5, length(x)) # uniform if no variation
+    } else {
+      (x - rng[1]) / diff(rng)
+    }
+  }))
+  # 获取 row_split：按排序后的 L1
+  row_l1 <- summary_data %>%
+    arrange(L1, L2) %>%
+    distinct(L1, L2) %>%
+    pull(L1)
+  # 定义注解颜色
+  unique_l1 <- unique(row_l1)
+  original_l1 <- gsub("\n", " ", unique_l1)
+  l1_colors <- setNames(custom_l1_colors[original_l1], unique_l1)
+  # 如果有未定义的颜色，可以设置为默认
+  l1_colors[is.na(l1_colors)] <- "grey"
+  # 行注解
+  row_anno <- rowAnnotation(L1 = row_l1, col = list(L1 = l1_colors),annotation_name_gp = gpar(fontsize = 10),
+                          annotation_name_rot = 0)
+  # 颜色映射（修改为8格颜色）
+  col_fun <- colorRamp2(seq(0, 1, length.out = 8), rev(brewer.pal(n = 8, name = "RdYlBu")))
+  # 绘制热图（去除 column_split 和 top_anno，关闭列聚类以保证顺序，并恢复x轴顺序为10,50,100,250）
+  ht <- Heatmap(heat_matrix_norm,
+                name = "Norm Abund",
+                col = col_fun,
+                row_split = row_l1, # 根据 L1 分割
+                cluster_rows = TRUE, # 在每个分割内聚类
+                cluster_columns = F, # 关闭列聚类以保证顺序
+                column_order = c("10", "50", "100", "250"), # 恢复x轴顺序
+                rect_gp = gpar(col = "black", lwd = 0.5), # 显示方格边框
+                show_column_names = TRUE, # 显示每列的横坐标（列名）
+                row_names_gp = grid::gpar(fontsize = 8),
+                clustering_distance_columns = "euclidean",
+                clustering_method_columns = "average" ,
+                column_names_gp = grid::gpar(fontsize = 10),
+                column_names_centered = TRUE,  # x轴标签居中对齐
+                row_title = NULL, # 关闭行标题显示（L1名称）
+                row_title_gp = grid::gpar(fontsize = 10),
+                right_annotation = row_anno,
+                show_parent_dend_line = FALSE, # 去除所有聚类树的虚线
+                heatmap_legend_param = list(
+                  title = "Row-normalized\nrelative abundance",
+                  at = seq(0, 1, length.out = 8), # 修改为8格
+                  labels = sprintf("%.1f", seq(0, 1, length.out = 8))
+                ),
+                column_names_rot = 0,  # x轴标签正置
+                width = unit(4, "cm"),  # 缩小瓦片宽度
+                column_title = paste("KEGG Pathways for", carb, "")
+  )
+  print(ht)
+  #export::graph2ppt(x = ht, file = "picrust2.pptx", append = TRUE)
+ 
+  # 绘制并收集（使用 grid.grabExpr 以捕获 gtable-like 对象）
+  plot_list[[carb]] <- grid::grid.grabExpr(draw(ht))
+  # ========== 9. 打印该碳源下二级通路所属一级通路的表格 ==========
+  pathway_table <- data_sub %>%
+    select(L2, L1) %>%
+    distinct() %>%
+    arrange(L2)
+  cat(paste("\nPathway table for", carb, ":\n"))
+  print(pathway_table)
+}
+```
+
+
+
+
+
+
+

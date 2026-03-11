@@ -1,0 +1,323 @@
+
+# α多样性分析
+
+α多样性分析显示，群落多样性随着细胞数量的增加而显著提升；然而，单一多样性指标与生物膜形成量之间未表现出显著相关性。
+
+- [ ] 细胞数少的时候，会不会有更多的稀有 ASV？会不会有不同的物种被筛选出来？
+
+## 加载需要的包
+
+
+```{r, message=FALSE}
+library(phyloseq)
+library(tidytree)
+library(Biostrings)
+library(vegan)
+library(ggtree)
+library(ape)
+library(scales)
+library(tidyverse)
+library(patchwork)
+library(RColorBrewer)
+library(ggVennDiagram)
+library(ggpmisc)
+library(export)
+library(aplot)
+library(cowplot)
+```
+
+### 加载数据集
+
+
+```{r}
+physeq <- readRDS("./data/dada2/microplate/filtered/physeq.rds") #读取
+```
+
+
+## 初始细胞数促进多样性增加但不增强生物膜形成能力
+
+尽管随着初始细胞数的增加，群落的α多样性显著提升，但这并未对应地带来生物膜形成能力的增强。这一结果提示，群落的功能输出并非仅由物种丰富度驱动，而可能更依赖于特定功能菌的存在及其相互关系，强调了‘功能性多样性’相对于‘计数性多样性’在生态过程中的重要性。
+
+### 初始细胞数驱动群落结构分化
+
+在碳源条件保持一致的背景下，我们观察到不同初始细胞数显著影响了微生物群落的结构特征。低细胞数的群落呈现出与高细胞数明显不同的组成模式，表明即便资源环境一致，群落的组装路径依然存在差异。这种差异可能源于以下几个机制:（1）优先效应，即在低密度群落中，早期定殖者对群落结构具有更强的影响力，因其所受生物竞争较少，能迅速扩张并塑造局部环境；（2）随机漂变：在细胞数较低的情况下更易发生，从而造成较大的群落组成变异；（3）物种间相互作用的强度差异，低细胞数下可能促使部分关键物种发挥更大的生态功能，主导群落结构。
+
+
+```{r}
+theme_set(theme_bw())
+
+# -------------------- 1. 聚合到 Genus 级别并计算相对丰度 --------------------
+ps_genus <- tax_glom(physeq, "Genus")
+ps_relabund <- transform_sample_counts(ps_genus, function(x) x / sum(x, na.rm = TRUE))
+df_all <- psmelt(ps_relabund) |> as_tibble()
+```
+
+
+```{r}
+# -------------------- 2. 计算全局 Top10 --------------------
+top10_genus_all <- df_all %>%
+  group_by(Genus) %>%
+  summarise(total = sum(Abundance), .groups="drop") %>%
+  slice_max(order_by = total, n = 7) %>%
+  pull(Genus)
+
+top10_genus_all
+```
+
+```{r}
+# -------------------- 3. 为不同属指定配色 --------------------
+top10_genus_colors = c(
+  "Pseudomonas" = "#332288", # 深靛蓝：高丰度主导属
+  "Klebsiella" = "#88CCEE", # 青蓝：凉调辅助
+  "Aeromonas" = "#117733", # 深绿：大地调水生关联
+  "Kosakonia" = "#44AA99", # 蓝绿：平衡中绿
+  "Stenotrophomonas" = "#CC6677", # 浅黄：温暖高光#CC6677
+  "Acinetobacter" = "#882255", # 橄榄绿：中性中调#882255
+  "Pseudoxanthomonas" = "#DDCC77", # 尘玫瑰：柔和红变体
+  "Ensifer" = "#999933", # 梅紫：深调内共生菌
+  "Rhizobium" = "#AA4499", # 洋红：鲜艳固氮菌
+  "Other" = "#DDDDDD" # 浅灰：背景融合
+)
+
+
+# 提取不同属的配色
+scales::show_col(top10_genus_colors) # 输出属的配色
+```
+
+保存颜色代码。
+
+```{r}
+saveRDS(top10_genus_colors, file = "./data/dada2/microplate/top10_genus_colors.rds")
+```
+
+```{r}
+# -------------------- 4. 循环每个 carbon 作图 --------------------
+df_summary <- df_all %>% 
+  mutate(Genus = fct_relevel(fct_other(Genus, top10_genus_all), c(top10_genus_all, "Other")),
+         cell_num = as_factor(cell_num)) |> 
+  group_by(carbon, cell_num, Genus) |> 
+  summarise(Abundance = mean(Abundance), .groups = "drop")
+
+p = ggplot(df_summary, aes(x = cell_num, y = Abundance, fill = Genus)) +
+  geom_bar(
+    stat = "identity",
+    position = position_fill(reverse = FALSE)
+  ) +
+  facet_wrap(~carbon, nrow = 1) +
+  scale_y_continuous(
+    labels = scales::label_percent(), # 直接显示数值，不显示百分号
+    expand = c(0, 0)
+  ) +
+  scale_fill_manual(
+    values = top10_genus_colors,
+    name = "Genus",
+    guide = guide_legend(reverse = F) ##图例顺序
+  ) +
+  labs(
+    x = NULL,
+    y = "Relative Abundance"
+  ) +
+  theme(
+    legend.position = "right" ,
+    axis.text.x = element_text( size = 10),
+    aspect.ratio = 1.2
+  )
+
+p
+
+#graph2ppt(p, file = "barchart.pptx",append = T)
+```
+
+
+
+## 群落结构
+
+
+```{r}
+sample_order = df_all %>%
+  filter(Genus == "Pseudomonas") %>%
+  arrange(desc(Abundance)) %>%
+  pull(Sample) %>%
+  as.character()
+
+df_mod = df_all |> 
+  mutate(Genus = fct_relevel(fct_other(Genus, top10_genus_all), c(top10_genus_all, "Other")),
+         cell_num = as_factor(cell_num)) |> 
+  group_by(carbon, cell_num, Sample, Genus) |>
+  summarise(Abundance = sum(Abundance, na.rm = TRUE), .groups = "drop") |> 
+  mutate(Sample = fct_relevel(Sample, sample_order))
+```
+
+```{r}
+#| fig-width: 10
+#| fig-height: 10
+p = ggplot(df_mod, aes(Sample, Abundance, fill = Genus)) +
+  geom_bar(stat = "identity", 
+           position = position_fill(reverse = TRUE),
+           width = 1) +
+  scale_fill_manual(values = top10_genus_colors) +
+  scale_y_continuous(labels = scales::label_percent()) +
+  facet_wrap(~ carbon + cell_num, scales = "free_x") +
+  theme(
+        axis.ticks.x = element_blank(),
+        axis.text.x = element_blank(),
+        element_text(angle = 30, hjust = 1, size = 10)#, aspect.ratio = 1.2
+        )
+p
+#graph2pdf(p, file = "boxchart.pdf")
+```
+
+### 堆叠柱状图绘制
+
+
+```{r}
+p <- ggplot(df_mod, aes(Sample, Abundance, fill = Genus)) +
+  geom_bar(stat = "identity",
+           position = position_fill(reverse = TRUE),
+           width = 1) +
+  scale_fill_manual(
+    values = top10_genus_colors,  # 使用我们定义的颜色
+    name = "Genus",
+    guide = guide_legend(reverse = FALSE)  # 调整图例顺序
+  ) +
+  scale_y_continuous(
+   labels = scales::label_percent(),
+    expand = expansion(0, 0.01)
+  ) +
+  scale_x_discrete(expand = c(0, 0) ) + 
+  labs(
+    x = NULL,               # 自定义 x 轴标签
+    y = "Relative Abundance"     # 自定义 y 轴标签
+  ) +
+    theme(
+      legend.position = "none",
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank()
+    )
+
+print(p)
+```
+
+```{r}
+# 1. 数据准备：确保 class 是因子 (factor) 类型，以便控制颜色顺序
+sample_info = data.frame(sample_data(physeq)) |> 
+  mutate(sampleID = fct_relevel(as.character(sampleID), sample_order),
+         cell_num = as_factor(cell_num),
+         carbon = as_factor(carbon),
+         class = as_factor(class)) |> # 直接使用 class
+  as_tibble()
+
+metric = c("carbon", "cell_num", "class")
+
+plots = lapply(metric, function(x){
+  ggplot(sample_info, aes(sampleID, x, fill = .data[[x]])) +
+    geom_tile() +
+    scale_y_discrete(expand = expansion(0,0)) +
+    labs(fill = x) +
+    theme(
+      legend.position = "none",
+      axis.title = element_blank(),
+      axis.text.x = element_blank(),
+      axis.ticks.x = element_blank())
+})
+
+plots[[1]] = plots[[1]] +
+  scale_fill_brewer(palette = "Set2")
+
+plots[[2]] = plots[[2]] +
+  scale_fill_brewer(palette = "Reds")
+
+# 修改 plots[[3]]：为 class 设置颜色
+#plots[[3]] = plots[[3]] +
+ # scale_fill_manual(values = RColorBrewer::brewer.pal(4, "Paired"))
+plots[[3]] = plots[[3]] +
+  scale_fill_manual(values = RColorBrewer::brewer.pal(12, "Paired")[c(3,4,9,10)])
+```
+
+
+
+```{r}
+
+carb_levels <- levels(sample_info$carbon)
+
+carb_hex <- brewer.pal(max(length(carb_levels), 3), "Set2")[1:length(carb_levels)]
+carbon_colors <- setNames(carb_hex, carb_levels)
+
+cell_levels <- levels(sample_info$cell_num)
+cell_hex <- brewer.pal(max(length(cell_levels), 3), "Reds")[1:length(cell_levels)]
+cell_num_colors <- setNames(cell_hex, cell_levels)
+
+class_levels <- levels(sample_info$class)
+class_hex_source <- brewer.pal(4, "Paired")
+class_hex <- class_hex_source[1:length(class_levels)]
+class_colors <- setNames(class_hex, class_levels)
+
+print("--- Carbon 颜色 ---")
+print(carbon_colors)
+
+print("--- Cell_num 颜色 ---")
+print(cell_num_colors)
+
+print("--- Class 颜色 ---")
+print(class_colors)
+```
+
+
+```{r}
+saveRDS(list(carbon = carbon_colors, cell = cell_num_colors, class = class_colors),  
+        file = "./data/dada2/microplate/factor_colors.rds")
+
+#scale_fill_manual(values = my_colors$carbon)
+#scale_color_manual(values = my_colors$cell)
+```
+
+
+### 组合热图
+
+收集图例
+
+```{r}
+main_panel = purrr::reduce(plots, insert_bottom) |> 
+  insert_top(p, height = 18)
+```
+
+
+```{r}
+
+main_legend = (p + 
+  guides(fill = guide_legend(nrow = 5, title = "Genus")) + 
+  theme(legend.position = "right")) |> 
+  get_legend()
+
+metric_legends = lapply(plots, function(x) get_legend(x + theme(legend.position = "right")))
+blank = ggplot() + theme_void()
+
+legend_panel = wrap_plots(
+  blank,
+  main_legend, 
+  metric_legends[[1]], 
+  metric_legends[[2]], 
+  metric_legends[[3]], 
+  nrow = 1
+  ) +
+
+    plot_layout(widths = c(0.3, 9, 1.8, 1.5, 1.5))
+```
+
+
+```{r}
+final_plot = wrap_plots(as.patchwork(main_panel), legend_panel, ncol = 1) + 
+  plot_layout(heights = c(4,3))
+final_plot
+
+
+#graph2ppt(final_plot, file = "result_plot.pptx", width = 10, height = 8, append = FALSE)
+#graph2png(final_plot, file = "result_plot.png", width = 10, height = 8, dpi = 300)
+#graph2pdf(final_plot, file = "alpha.pdf")
+```
+
+
+
+
+
+

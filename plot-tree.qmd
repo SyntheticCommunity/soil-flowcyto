@@ -1,0 +1,207 @@
+# Tree Plot
+
+- Prevelance: 出现次数小于 1% 的 ASV 要不要剔除？
+- Klebsiella 属只鉴定出了 2 个 ASV（它的 Prevelance 很高），怎么理解？
+
+## Read Phyloseq Object
+
+```{r}
+library(phyloseq)
+
+ps_file = xfun::magic_path("microplate/filtered/physeq.rds")
+ps = readRDS(ps_file)
+
+ps
+```
+
+## Plot Tree
+
+```{r}
+library(ggplot2)
+library(ggtree)
+library(tidytree)
+library(aplot)
+
+theme_set(theme_bw())
+```
+
+### 分类信息
+
+```{r}
+library(dplyr)
+
+tax = tax_table(ps) |> 
+    data.frame() |> 
+    tibble::rownames_to_column("label") |> 
+    as_tibble()
+```
+
+### 基础树
+
+```{r}
+tree = phy_tree(ps)
+
+ggtree(tree, layout = "rectangular") %<+% tax +
+    aes(color = Phylum)
+```
+
+### 分组树
+
+在 ggtree 中，要让**共同的内部分支（Internal branches）**也带上颜色，核心在于将分类信息（如 Phylum）从叶子节点（Tips）向上推导至它们的共同最近共同祖先（MRCA）。
+
+使用 `groupOTU()` 函数，会递归地将分支信息应用到整个进化支上。
+
+```{r}
+# 按 Phylum 分组
+group_list = split(tax$label, tax$Phylum)
+
+# 将分组信息传递给树对象
+tree_grouped = groupOTU(tree, group_list)
+
+tree_plot = ggtree(tree_grouped, branch.length = "none", aes(color = group)) +
+    scale_x_continuous(expand = c(0, 0)) +
+    labs(x = "Phylogenetic Tree", color = "Phylum") +
+    layout_dendrogram()
+
+tree_plot
+```
+
+
+### Phylum 颜色块
+
+```{r}
+phylum_plot = ggplot(tax, aes(label, 1, fill = Phylum)) +
+    geom_tile() +
+    labs(y = "Phylum") +
+   # scale_y_continuous(expand = c(0, 0)) +
+    theme(legend.position = "none",
+          axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          axis.title.x = element_blank(),
+          axis.title.y = element_text(angle = 0)
+    )
+
+phylum_plot
+```
+
+
+### 相对丰度
+
+
+```{r}
+abundance_df = data.frame(otu_table(ps)) |> 
+    tibble::rownames_to_column("label") |> 
+    tidyr::pivot_longer(-label, names_to = "SampleID", values_to = "Abundance") |> 
+    dplyr::filter(Abundance > 0) |>
+    group_by(SampleID) |>
+    mutate(RelativeAbundance = Abundance / sum(Abundance)) |>
+    as_tibble()
+
+abundance_plot = ggplot(abundance_df, aes(x = label, y = log10(RelativeAbundance))) +
+    geom_boxplot(outliers = FALSE, fill = "grey") +
+    labs(y = "Log10 Relative Abundance", x = "ASV") +
+    theme(
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        legend.position = "none"
+    )
+
+abundance_plot
+```
+
+
+### Genus 颜色块
+
+```{r}
+my_saved_colors <- readRDS("./data/dada2/microplate/top10_genus_colors.rds")
+```
+
+
+```{r}
+genus_keep = abundance_df |> 
+    left_join(tax) |>
+    group_by(Genus) |> 
+    summarise(TotalAbundance = sum(RelativeAbundance)) |> 
+    arrange(desc(TotalAbundance)) |> 
+    filter(!is.na(Genus)) |> 
+    slice_head(n = 6) |> 
+    pull(Genus)
+
+tax_lite = tax |> 
+    mutate(Genus = ifelse(Genus %in% genus_keep, Genus, "Other")) |> 
+    mutate(Genus = factor(Genus, levels = c(genus_keep, "Other")))
+
+#genus_fill_cols = c(RColorBrewer::brewer.pal(n = length(genus_keep), name = "Paired"), "grey")
+
+# 3. 绘制图形
+genus_plot = ggplot(tax_lite, aes(label, 1, fill = Genus)) +
+    geom_tile() +
+    labs(y = "Genus") +
+    scale_y_continuous(expand = c(0, 0)) +
+    scale_fill_manual(values = my_saved_colors) +
+    
+    theme(axis.text = element_blank(),
+          axis.ticks = element_blank(),
+          axis.title.x = element_blank(),
+          axis.title.y = element_text(angle = 0)
+    )
+
+# 4. 查看图形
+print(genus_plot)
+```
+
+
+### 按属分类的相对丰度
+
+```{r}
+abundance_plot2 = abundance_df |> 
+    left_join(tax_lite) |> 
+    ggplot(aes(x = label, y = log10(RelativeAbundance), fill = Genus)) +
+    geom_boxplot(outliers = FALSE) +
+    labs(y = "Log10 Relative Abundance", x = "ASV") +
+    scale_fill_manual(values = my_saved_colors) +
+    theme(
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        legend.position = "none"
+    )
+
+abundance_plot2
+```
+
+### 出现频次
+
+```{r}
+prevalence_df = data.frame(otu_table(ps)) |> 
+    tibble::rownames_to_column("label") |> 
+    tidyr::pivot_longer(-label, names_to = "SampleID", values_to = "Abundance") |> 
+    group_by(label) |> 
+    summarise(Prevalence = sum(Abundance > 0)) |> 
+    ungroup() |> 
+    left_join(tax_lite)
+
+prevalence_plot = ggplot(prevalence_df, aes(x = label, y = Prevalence, fill = Genus)) +
+    geom_bar(stat = "identity") +
+    labs(y = "Prevalence", x = NULL) +
+    scale_fill_manual(values = my_saved_colors) +
+    theme(
+        axis.text.x = element_blank(),
+        axis.ticks.x = element_blank(),
+        legend.position = "none"
+    )
+
+prevalence_plot
+```
+
+### 组合图形
+
+```{r}
+tree = genus_plot |> 
+       insert_top(phylum_plot, height = 1) |>
+       insert_top(tree_plot, height = 8) |>
+       insert_bottom(prevalence_plot, height = 4) |>
+       insert_bottom(abundance_plot2, height = 12)
+
+tree
+#graph2pdf(tree, file = "treeplot.pdf")
+```

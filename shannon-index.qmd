@@ -1,0 +1,157 @@
+# 香农指数
+
+## 分析内容
+
+- [] 分析微生物群落的 α 多样性，探讨其与碳源、初始细胞数、生长和生物膜形成能力之间的关系。
+- [] 计算 Shannon 指数、Simpson 指数和 Chao1 指数等 α 多样性指标。
+- [] 使用 Kruskal-Wallis 检验和 Dunn 事后检验评估不同初始细胞数和生物膜分组之间的多样性差异。
+
+### 加载数据
+
+```{r}
+library(phyloseq)
+physeq = readRDS("./data/dada2/microplate/filtered/physeq.rds")
+#sample_data(physeq)$cell_num = as.factor(sample_data(physeq)$cell_num)
+
+physeq
+```
+
+
+
+### 绘制稀释曲线 (Rarefaction Curve)
+
+在决定抽平深度前，最好先看一眼稀释曲线，确认你的测序深度是否已经达到了平台期（即增加测序量也不再产生新物种）。
+
+```{r}
+#| results: FALSE
+library(ranacapa)
+library(ggplot2)
+theme_set(theme_bw())
+
+ggrare(physeq, step = 1000, color = "type", plot = FALSE) +
+    facet_wrap(~storage)
+```
+
+
+### 抽平
+
+这是一个在微生物组分析领域非常有争议（但有明确共识趋势）的问题。简单的回答是：**虽然传统上习惯抽平，但现代分析中，抽平（Rarefaction）并不是唯一的、甚至不是最好的选择。**
+
+| 分析类型 | 是否建议抽平 | 原因 |
+| --- | --- | --- |
+| **Alpha 多样性** | **建议抽平** | 观测到的物种数（Richness/Chao1）受测序深度影响极大。测得越深，看到的物种越多。如果不抽平，测序量大的样本会显得多样性更高。 |
+| **Beta 多样性** | **可选/不建议** | 抽平会丢弃大量数据，增加噪音。现代方法如 `DESeq2`、`edgeR` 或使用 **CLR (中心对数比转换)** 能更好地处理测序深度差异。 |
+| **差异分析 (DA)** | **强烈不建议** | 抽平会人为减少统计效能，增加假阴性。 |
+
+如果你是在做基础的、面向探索性的研究，**Alpha 多样性分析前建议抽平**；但在做 Beta 多样性或差异分析时，可以考虑使用标准化的方法（如 Relative Abundance 或 VST/CLR 转换）。
+
+在 `phyloseq` 中，抽平主要使用 `rarefy_even_depth()` 函数。
+
+1. 检查各样本的测序深度（Reads 总数）。
+
+```{r}
+sample_sums(physeq) |> 
+    hist()
+```
+
+2. 进行抽平
+
+```{r}
+# sample.size: 抽平到的深度（通常取所有样本中的最小值，或者一个固定的阈值）
+# rngseed: 必须设置随机数种子，保证结果可重复
+ps_rare <- rarefy_even_depth(physeq, 
+                             sample.size = 20000, 
+                             rngseed = 123, 
+                             replace = FALSE)
+
+ps_rare
+```
+
+
+4. 计算多样性并绘图。
+
+```{r}
+#| label: fig-richness-boxplot
+#| fig-cap: "不同初始细胞数、碳源和表型分组下的 α 多样性比较"
+#| fig-subcap: 
+#|   - A
+#|   - B
+#|   - C
+#| layout-nrow: 3
+library(ggpubr)
+library(ggplot2)
+theme_set(theme_bw())
+
+plot_richness(ps_rare, x = "cell_num", measures = c("Observed", "Shannon", "Chao1", "Simpson")) +
+  geom_boxplot() +
+  stat_compare_means(method = "kruskal.test", label = "p.format") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+plot_richness(ps_rare, x = "carbon", measures = c("Observed", "Shannon", "Chao1", "Simpson")) +
+  geom_boxplot() +
+  stat_compare_means(method = "kruskal.test", label = "p.format") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+plot_richness(ps_rare, x = "class", measures = c("Observed", "Shannon", "Chao1", "Simpson")) +
+  geom_boxplot() +
+  stat_compare_means(method = "kruskal.test", label = "p.format") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
+
+相较于 Shannon 和 Simpson 指数，Chao1 更注重对稀有物种的估计，因此在本研究中对细胞数变化的响应不如 Shannon 指数敏感。考虑到群落组成主要表现为主导种间的丰度变化，Shannon 指数更适合作为群落 α 多样性的表征指标（[@fig-richness-boxplot]）。
+
+
+### 构建多样性分析数据集并加生物膜分组
+
+根据生物膜的生物量多少进行分组。
+
+
+### 初始细胞数驱动多样性增加
+
+我们观察到，随着初始接种细胞数的增加，群落的α多样性显著提升高。这一趋势表明，初始细胞数作为群落组装的关键生态因子，在低细胞数条件下，群落更容易受到随机扩增、优先效应以及瓶颈效应的影响，导致少数优势菌迅速占据生态位，从而降低群落的整体多样性。而在高接种量条件下，更多的物种能够同时进入系统并建立稳定种群，从而形成更加复杂和均匀的群落结构。
+
+```{r}
+library(tidyverse)
+library(export)
+theme_set(theme_bw())
+
+shannon_index = estimate_richness(ps_rare, measures = c("Shannon")) |> 
+    rownames_to_column(var = "sampleID") |>
+    left_join(data.frame(sample_data(ps_rare)) |> mutate(sampleID = as.character(sampleID))) |> 
+    mutate(cell_num = as_factor(cell_num),
+           carbon = factor(carbon),
+           growth = str_sub(class, 1, 2),
+           biofilm = str_sub(class, 3, 4)
+           ) |> 
+            as_tibble()
+
+plots = lapply(c("carbon","cell_num","class"), function(x){
+    ggplot(shannon_index, aes(.data[[x]], Shannon)) +
+        geom_boxplot(outliers = FALSE) +
+        stat_compare_means(method = "kruskal.test", label = "p.format") +
+        labs(x = NULL, y = "Shannon Index") +
+        theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 10), aspect.ratio = 1.2)
+})
+
+final_plot =cowplot::plot_grid(plotlist = plots, nrow = 1, labels = "auto", align = "hv")
+
+print(final_plot)
+
+#graph2ppt(final_plot, file = "shannon-index.ppt")
+```
+
+
+### 多样性提升未显著增强群落生物膜形成能力
+
+尽管随着初始细胞数的增加，群落的α多样性（如Shannon指数）呈显著上升趋势，但生物膜形成能力并未同步增强，二者之间并不呈正相关关系。这一结果表明，群落的结构复杂性并不直接决定其功能表达，生物膜形成可能更多受到特定功能菌或其互作关系的影响。多样性的提升可能引入了功能冗余或中性种群，反而稀释了关键菌的生态位优势。此外，在多样性较高的群落中，种间竞争可能更为激烈，抑制了某些主导物种的生物膜形成能力。因此，微生物群落功能的表达并非仅取决于物种丰富度，可能而更依赖于关键功能成员的存在以及相互作用。
+
+### 多样性提升未显著增强群落生物膜形成能力
+
+尽管随着初始细胞数的增加，群落的α多样性（如Shannon指数）呈显著上升趋势，但生物膜形成能力并未同步增强，二者之间并不呈正相关关系。这一结果表明，群落的结构复杂性并不直接决定其功能表达，生物膜形成可能更多受到特定功能菌或其互作关系的影响。多样性的提升可能引入了功能冗余或中性种群，反而稀释了关键菌的生态位优势。此外，在多样性较高的群落中，种间竞争可能更为激烈，抑制了某些主导物种的生物膜形成能力。因此，微生物群落功能的表达并非仅取决于物种丰富度，可能而更依赖于关键功能成员的存在以及相互作用。
+
+
+### 不同生物膜分组之间的多样性并无差异
+
+这里按照碳源单独绘制可视化方便后续整理。
+

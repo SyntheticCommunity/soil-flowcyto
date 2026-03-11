@@ -1,0 +1,495 @@
+#  不同类型样品之间的差异
+
+此部分将分选样品结合土壤和细胞的测序结果结合分析不同处理之间存在的差异。
+
+
+## Venn图分析
+
+通过Venn图来展示不同来源样品之间的ASV序列的存在情况。
+
+### 加载需要的包
+
+```{r}
+# 加载必要包
+library(phyloseq)
+library(ggVennDiagram)
+library(patchwork)
+library(purrr)
+library(multcompView)
+library(ggplot2)
+library(dplyr)
+```
+
+
+
+### 加载
+
+```{r}
+
+physeq <- readRDS("./data/dada2/physeq.rds") 
+
+physeq_filtered <- readRDS("./data/dada2_sup/physeq_filtered.rds") 
+
+```
+
+
+```{r}
+
+# 提取 physeq 的所有序列作为字符集（唯一序列）
+all_seqs <- unique(as.character(refseq(physeq)))
+
+# 从 physeq_filtered 取样本元数据
+sample_metadata <- sample_data(physeq_filtered)
+
+# 过滤 storage = "fresh" 的样本
+fresh_samples <- sample_metadata[sample_metadata$storage == "fresh", ]
+
+# 分组 type = "soil" 和 "cell"
+cell_samples <- rownames(fresh_samples[fresh_samples$type == "cell", ])
+soil_samples <- rownames(fresh_samples[fresh_samples$type == "soil", ])
+
+# 提取 OTU 表（避免直接子集 phyloseq 对象）
+otu_tab <- otu_table(physeq_filtered)
+
+# 计算存在于 soil 样本的 ASV（rowSums > 0）
+soil_asv <- rownames(otu_tab)[rowSums(otu_tab[, soil_samples, drop = FALSE] > 0) > 0]
+
+# 提取对应序列（唯一）
+soil_seqs <- unique(as.character(refseq(physeq_filtered)[soil_asv]))
+
+# 计算存在于 cell 样本的 ASV
+cell_asv <- rownames(otu_tab)[rowSums(otu_tab[, cell_samples, drop = FALSE] > 0) > 0]
+
+# 提取对应序列（唯一）
+cell_seqs <- unique(as.character(refseq(physeq_filtered)[cell_asv]))
+
+# 构建序列集
+seq_sets <- list(
+  "Flowcyto" = all_seqs,
+  "Cell" = cell_seqs,
+  "Soil" = soil_seqs
+)
+
+# 直接绘制 Venn 图（假设始终有 3 个集）
+p <- ggVennDiagram(
+  seq_sets,
+  label = "count",
+  label_alpha = 0
+) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(title = "", fill = "Count") +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+  )
+print(p)
+
+# --- 使用 ggVennDiagram 的 Venn 和 venn_region 提取各部分并打印细菌分类 ---
+
+# 创建 Venn 对象
+venn_obj <- Venn(seq_sets)
+
+# 处理 Venn 对象
+venn_data <- process_data(venn_obj)
+
+# 提取区域信息（包括每个区域的项）
+regions <- venn_region(venn_data)
+
+# 提取分类表
+tax_physeq <- as.data.frame(tax_table(physeq))
+tax_physeq$Sequence <- as.character(refseq(physeq))
+tax_physeq$ASV <- rownames(tax_physeq)
+
+tax_filtered <- as.data.frame(tax_table(physeq_filtered))
+tax_filtered$Sequence <- as.character(refseq(physeq_filtered))
+tax_filtered$ASV <- rownames(tax_filtered)
+
+# 为每个区域输出内容和分类
+for (i in seq_len(nrow(regions))) {
+  region_name <- regions$name[i]  # 如 "Flowcyto", "Flowcyto&Cell" 等
+  
+  if (length(region_name) == 0) next  # 跳过空名称
+  
+  seqs <- regions$item[[i]]  
+  
+  if (length(seqs) > 0) {
+    # 根据区域选择税表：仅 Flowcyto 用 physeq，其它用 filtered
+    if (region_name == "Flowcyto") {
+      region_tax <- tax_physeq[tax_physeq$Sequence %in% seqs, ]
+    } else {
+      region_tax <- tax_filtered[tax_filtered$Sequence %in% seqs, ]
+    }
+    
+    # 打印区域名称和序列数量
+    cat("\n### Region:", region_name, "(", length(seqs), "Sequences/ASVs )\n")
+    
+    # 打印全分类表（如果太多，可用 head() 查看前几行）
+    print(region_tax)
+    
+    # 汇总按 Genus（属）计数（更简洁）
+    genus_summary <- region_tax %>%
+      group_by(Genus) %>%
+      summarise(Count = n(), .groups = "drop") %>%
+      arrange(desc(Count))
+    cat("\nGenus Summary:\n")
+    print(genus_summary)
+    
+  } else {
+    cat("\n### Region:", region_name, "(空)\n")
+  }
+}
+
+```
+
+
+
+### 绘制不同来源样品的Venn图
+
+Venn图展示不同来源样品之间的ASV差异，土壤和细胞之间的差异来自于细胞的提取方法，细胞与分选之间的差异来自于不同初始条件的培养结果。
+
+```{r}
+# 提取 physeq 的所有序列作为字符集（唯一序列）
+all_seqs <- unique(as.character(refseq(physeq)))
+
+# 从 physeq_filtered 取样本元数据
+sample_metadata <- sample_data(physeq_filtered)
+
+# 过滤 storage = "fresh" 的样本
+fresh_samples <- sample_metadata[sample_metadata$storage == "fresh" ]
+
+# 分组 type = "soil" 和 "cell"
+cell_samples <- rownames(fresh_samples[fresh_samples$type == "cell", ])
+soil_samples <- rownames(fresh_samples[fresh_samples$type == "soil", ])
+
+# 提取 OTU 表（避免直接子集 phyloseq 对象）
+otu_tab <- otu_table(physeq_filtered)
+
+# 计算存在于 soil 样本的 ASV（rowSums > 0）
+soil_asv <- rownames(otu_tab)[rowSums(otu_tab[, soil_samples, drop = FALSE] > 0) > 0]
+# 提取对应序列（唯一）
+soil_seqs <- unique(as.character(refseq(physeq_filtered)[soil_asv]))
+
+# 计算存在于 cell 样本的 ASV
+cell_asv <- rownames(otu_tab)[rowSums(otu_tab[, cell_samples, drop = FALSE] > 0) > 0]
+# 提取对应序列（唯一）
+cell_seqs <- unique(as.character(refseq(physeq_filtered)[cell_asv]))
+
+# 构建序列集
+seq_sets <- list(
+  "Flowcyto" = all_seqs,
+  "Cell" = cell_seqs,
+  "Soil" = soil_seqs
+)
+
+# 直接绘制 Venn 图（假设始终有 3 个集）
+p <- ggVennDiagram(
+  seq_sets,
+  label = "count",
+  label_alpha = 0
+) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(title = "", fill = "Count") +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+  )
+
+print(p)
+  
+#graph2ppt(x =p, file = "contrast-sup.pptx" , append = TRUE)
+```
+
+### 按属绘制
+
+```{r}
+# 提取 physeq 的所有属作为字符集（唯一属）
+tax_tab_all <- tax_table(physeq)
+all_genera <- unique(tax_tab_all[, "Phylum"][!is.na(tax_tab_all[, "Phylum"])])
+
+# 从 physeq_filtered 取样本元数据
+sample_metadata <- sample_data(physeq_filtered)
+
+# 过滤 storage = "fresh" 的样本
+fresh_samples <- sample_metadata[sample_metadata$storage == "fresh", ]
+
+# 分组 type = "soil" 和 "cell"
+cell_samples <- rownames(fresh_samples[fresh_samples$type == "cell", ])
+soil_samples <- rownames(fresh_samples[fresh_samples$type == "soil", ])
+
+# 提取 OTU 表（避免直接子集 phyloseq 对象）
+otu_tab <- otu_table(physeq_filtered)
+
+# 计算存在于 soil 样本的 ASV（rowSums > 0）
+soil_asv <- rownames(otu_tab)[rowSums(otu_tab[, soil_samples, drop = FALSE] > 0) > 0]
+
+# 提取对应属（唯一）
+tax_tab_filtered <- tax_table(physeq_filtered)
+soil_genera <- unique(tax_tab_filtered[soil_asv, "Phylum"][!is.na(tax_tab_filtered[soil_asv, "Phylum"])])
+
+# 计算存在于 cell 样本的 ASV
+cell_asv <- rownames(otu_tab)[rowSums(otu_tab[, cell_samples, drop = FALSE] > 0) > 0]
+
+# 提取对应属（唯一）
+cell_genera <- unique(tax_tab_filtered[cell_asv, "Phylum"][!is.na(tax_tab_filtered[cell_asv, "Phylum"])])
+
+# 构建属集
+genus_sets <- list(
+  "Flowcyto" = all_genera,
+  "Cell" = cell_genera,
+  "Soil" = soil_genera
+)
+
+# 直接绘制 Venn 图（假设始终有 3 个集）
+p <- ggVennDiagram(
+  genus_sets,
+  label = "count",
+  label_alpha = 0
+) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(title = "", fill = "Count") +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+  )
+print(p)
+
+#graph2ppt(x = p, file = "contrast-sup.pptx", append = TRUE)
+```
+
+
+```{r}
+library(phyloseq)
+library(ggVennDiagram)
+library(dplyr)  # 用于汇总和处理数据
+
+# 提取 physeq 的所有属作为字符集（唯一属）
+tax_tab_all <- tax_table(physeq)
+all_genera <- unique(tax_tab_all[, "Genus"][!is.na(tax_tab_all[, "Genus"])])
+
+# 从 physeq_filtered 取样本元数据
+sample_metadata <- sample_data(physeq_filtered)
+
+# 过滤 storage = "fresh" 的样本
+fresh_samples <- sample_metadata[sample_metadata$storage == "fresh", ]
+
+# 分组 type = "soil" 和 "cell"
+cell_samples <- rownames(fresh_samples[fresh_samples$type == "cell", ])
+soil_samples <- rownames(fresh_samples[fresh_samples$type == "soil", ])
+
+# 提取 OTU 表（避免直接子集 phyloseq 对象）
+otu_tab <- otu_table(physeq_filtered)
+
+# 计算存在于 soil 样本的 ASV（rowSums > 0）
+soil_asv <- rownames(otu_tab)[rowSums(otu_tab[, soil_samples, drop = FALSE] > 0) > 0]
+
+# 提取对应属（唯一）
+tax_tab_filtered <- tax_table(physeq_filtered)
+soil_genera <- unique(tax_tab_filtered[soil_asv, "Genus"][!is.na(tax_tab_filtered[soil_asv, "Genus"])])
+
+# 计算存在于 cell 样本的 ASV
+cell_asv <- rownames(otu_tab)[rowSums(otu_tab[, cell_samples, drop = FALSE] > 0) > 0]
+
+# 提取对应属（唯一）
+cell_genera <- unique(tax_tab_filtered[cell_asv, "Genus"][!is.na(tax_tab_filtered[cell_asv, "Genus"])])
+
+# 构建属集
+genus_sets <- list(
+  "Flowcyto" = all_genera,
+  "Cell" = cell_genera,
+  "Soil" = soil_genera
+)
+
+# 直接绘制 Venn 图（假设始终有 3 个集）
+p <- ggVennDiagram(
+  genus_sets,
+  label = "count",
+  label_alpha = 0
+) +
+  scale_fill_gradient(low = "white", high = "steelblue") +
+  labs(title = "", fill = "Count") +
+  theme(
+    legend.position = "right",
+    plot.title = element_text(size = 14, face = "bold", hjust = 0.5)
+  )
+print(p)
+
+# --- 使用 ggVennDiagram 的 Venn 和 venn_region 提取各部分 ---
+
+# 创建 Venn 对象
+venn_obj <- Venn(genus_sets)
+
+# 处理 Venn 对象
+venn_data <- process_data(venn_obj)
+
+# 提取区域信息（包括每个区域的项）
+regions <- venn_region(venn_data)
+
+# 为每个区域输出内容（这里是 Phylum 名称列表）
+for (i in seq_len(nrow(regions))) {
+  region_name <- regions$name[i]  # 如 "Flowcyto", "Flowcyto&Cell" 等
+  
+  if (length(region_name) == 0) next  # 跳过空名称
+  
+  phyla <- regions$item[[i]]  
+  
+  if (length(phyla) > 0) {
+    # 打印区域名称和 Phylum 数量
+    cat("\n### Region:", region_name, "(", length(phyla), "Phyla )\n")
+    
+    # 打印 Phylum 列表
+    print(phyla)
+    
+  } else {
+    cat("\n### Region:", region_name, "(空)\n")
+  }
+}
+```
+
+## α多样性的差异
+
+不同来源的样品的多样性差异比较，理论上土壤应该＞提取的细胞＞分选样品，产生这种的结果原因时提取细胞时因为提取的方法造成提取的微生物种类不同，分选样品经过培养后造成群落的收敛导致多样性会小于细胞。
+
+### 多样性计算
+
+这里一次了计算多种α多样性指标，方便后续的分析选择。
+
+```{r}
+# 假设 physeq 和 physeq_filtered 已经存在
+
+# 计算 physeq 全数据集 alpha 多样性
+alpha_physeq <- estimate_richness(physeq, measures = c("Shannon", "Simpson", "Chao1"))
+alpha_physeq$Dataset <- "physeq"
+alpha_physeq$storage <- "All"
+alpha_physeq$type <- "All"
+
+# 计算 physeq_filtered 数据集 alpha 多样性
+alpha_filtered <- estimate_richness(physeq_filtered, measures = c("Shannon", "Simpson", "Chao1"))
+alpha_filtered$Dataset <- "physeq_filtered"
+
+# 提取元数据
+sample_meta_filtered <- as.data.frame(sample_data(physeq_filtered))
+alpha_filtered <- cbind(
+  alpha_filtered,
+  sample_meta_filtered[rownames(alpha_filtered), c("storage", "type")]
+)
+
+# 合并数据
+alpha_all <- rbind(
+  alpha_physeq[, c("Shannon", "Simpson", "Chao1", "Dataset", "storage", "type")],
+  alpha_filtered[, c("Shannon", "Simpson", "Chao1", "Dataset", "storage", "type")]
+)
+
+# 创建 Group 列用于绘图
+alpha_all$Group <- ifelse(
+  alpha_all$Dataset == "physeq",
+  "physeq",
+  paste0(alpha_all$storage, "_", alpha_all$type)
+)
+```
+
+### 多样性分析
+
+分析结果与预期一致土壤多样性＞细胞＞分选，选择Shannno指标作为评判标准，同时考虑物种的存在与丰度。
+
+```{r}
+# 2. 准备子集并设因子顺序
+fresh_df <- alpha_all %>%
+  filter(storage %in% c("fresh", "All")) %>%
+  mutate(type = factor(type, levels = c("All", "cell", "soil")))
+
+# 3. Kruskal–Wallis 整体检验
+kw <- kruskal.test(Shannon ~ type, data = fresh_df)
+
+# 4. pairwise Wilcoxon + Bonferroni 校正
+pw <- pairwise.wilcox.test(
+  x               = fresh_df$Shannon,
+  g               = fresh_df$type,
+  p.adjust.method = "bonferroni"
+)
+
+# 5. 提取校正后的 p 值并生成字母标签
+p_adj <- c(
+  `All-cell`  = pw$p.value["cell", "All"],
+  `All-soil`  = pw$p.value["soil", "All"],
+  `cell-soil` = pw$p.value["soil", "cell"]
+)
+letters <- multcompLetters(p_adj, threshold = 0.05)$Letters
+
+# 6. 计算字母放置位置
+rng <- diff(range(fresh_df$Shannon))
+pos_df <- fresh_df %>%
+  group_by(type) %>%
+  summarise(y_base = max(Shannon), .groups = "drop") %>%
+  mutate(
+    letter = letters[as.character(type)],
+    y_pos  = y_base + 0.1 * rng
+  )
+
+# 7. 绘图并添加注释
+p2 <- ggplot(
+  fresh_df,
+  aes(x = type, y = Shannon, fill = Group)
+) +
+  geom_boxplot(position = position_dodge(width = 0.75)) +
+  scale_x_discrete(
+    name   = "",
+    breaks = c("All", "cell", "soil"),
+    labels = c("flowcyto", "cell", "soil")
+  ) +
+  scale_fill_manual(
+    name   = "Group",
+    breaks = c("physeq", "fresh_cell", "fresh_soil"),
+    values = c(
+      physeq     = "#0072B2",
+      fresh_cell = "#D55E00",
+      fresh_soil = "#009E73"
+    ),
+    labels = c(
+      physeq     = "flowcyto",
+      fresh_cell = "cell",
+      fresh_soil = "soil"
+    )
+  ) +
+  labs(
+    title = "Alpha diversity (Shannon) ",
+    y     = "Shannon diversity"
+  ) +
+  coord_fixed(ratio = 0.8) +
+  theme_minimal() +
+  theme(
+  panel.grid.major = element_blank(),
+  panel.grid.minor = element_blank(),
+  panel.background = element_blank(),
+  axis.line.x = element_line(color = "black"),
+  axis.line.y = element_line(color = "black"),
+  axis.text.x = element_text(angle = 0, hjust = 0.5, size = 12),
+  axis.text.y = element_text(angle = 0, hjust = 0.5, size = 12),
+  axis.ticks.y = element_line(color = "black", size = 0.5),
+  axis.ticks.length.y = unit(0.1, "cm"),
+  legend.key = element_blank(),
+  legend.background = element_blank(),
+  legend.text = element_text(size = 10),
+  legend.title = element_text(size = 10, face = "bold")
+  ) +
+  # 添加整体 K-W p 值
+  annotate(
+    "text",
+    x     = 2,
+    y     = max(fresh_df$Shannon) + 0.2 * rng,
+    label = paste0("p = ", signif(kw$p.value, 2)),
+    fontface = "italic"
+  ) +
+  # 添加事后两两比较字母
+  geom_text(
+    data        = pos_df,
+    aes(x = type, y = y_pos, label = letter),
+    inherit.aes = FALSE,
+    size        = 5,
+    vjust       = 0
+  )
+
+# 8. 打印最终图形
+print(p2)
+
+#graph2ppt(x =p2, file = "contrast-sup.pptx" , append = TRUE)
+```

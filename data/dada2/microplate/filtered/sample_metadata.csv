@@ -1,0 +1,385 @@
+sampleID,well_id,carbon,cell_num,growth,biofilm,class
+1,flowcyto_10_l03_F4,glutamic acid,10,0.5976,0.2498,HGLB
+2,flowcyto_10_l02_F2,glutamic acid,10,0.5964,0.2148,HGLB
+3,flowcyto_10_l02_G11,glutamic acid,10,0.5932,0.2298,HGLB
+4,flowcyto_10_l01_G7,glutamic acid,10,0.576,0.2276,HGLB
+5,flowcyto_10_l03_G6,glutamic acid,10,0.531,0.2075,HGLB
+6,flowcyto_10_l04_G7,glutamic acid,10,0.5234,0.2241,HGLB
+11,flowcyto_10_l02_C9,glutamic acid,10,0.4621,8.2401,HGHB
+12,flowcyto_10_l02_B3,glutamic acid,10,0.4613,3.4077,HGHB
+13,flowcyto_10_l04_E3,glutamic acid,10,0.4927,2.5669,HGHB
+14,flowcyto_10_l05_C9,glutamic acid,10,0.529,1.9775,HGHB
+15,flowcyto_10_l01_G3,glutamic acid,10,0.9244,0.5565,HGHB
+16,flowcyto_10_l02_F11,glutamic acid,10,0.7058,0.5496,HGHB
+21,flowcyto_10_l04_C3,glutamic acid,10,0.3386,3.8051,LGHB
+22,flowcyto_10_l01_D11,glutamic acid,10,0.3908,3.457,LGHB
+23,flowcyto_10_l04_D11,glutamic acid,10,0.2873,2.7972,LGHB
+24,flowcyto_10_l02_D8,glutamic acid,10,0.3459,2.5198,LGHB
+25,flowcyto_10_l04_B7,glutamic acid,10,0.3661,2.4928,LGHB
+26,flowcyto_10_l02_C7,glutamic acid,10,0.2968,2.2879,LGHB
+31,flowcyto_10_l01_F8,glutamic acid,10,0.1385,0.1848,LGLB
+32,flowcyto_10_l03_B7,glutamic acid,10,0.2967,0.2483,LGLB
+33,flowcyto_10_l01_D5,glutamic acid,10,0.2896,0.2283,LGLB
+34,flowcyto_10_l04_C6,glutamic acid,10,0.2768,0.2637,LGLB
+35,flowcyto_10_l03_C10,glutamic acid,10,0.2558,0.2005,LGLB
+36,flowcyto_10_l03_F10,glutamic acid,10,0.2466,0.1999,LGLB
+41,flowcyto_50_l10_F2,glutamic acid,50,0.6609,0.2919,HGLB
+42,flowcyto_50_l07_G4,glutamic acid,50,0.6059,0.3214,HGLB
+43,flowcyto_50_l07_F11,glutamic acid,50,0.6044,0.3263,HGLB
+44,flowcyto_50_l10_G3,glutamic acid,50,0.5933,0.2361,HGLB
+45,flowcyto_50_l06_B2,glutamic acid,50,0.5653,0.1917,HGLB
+46,flowcyto_50_l08_G6,glutamic acid,50,0.5381,0.2149,HGLB
+51,flowcyto_50_l09_G11,glutamic acid,50,0.701,2.0396,HGHB
+52,flowcyto_50_l09_D11,glutamic acid,50,0.7007,0.6472,HGHB
+53,flowcyto_50_l10_B10,glutamic acid,50,0.4786,1.7425,HGHB
+54,flowcyto_50_l07_C3,glutamic acid,50,0.4544,1.6438,HGHB
+55,flowcyto_50_l10_B9,glutamic acid,50,0.4836,1.1964,HGHB
+56,flowcyto_50_l10_G11,glutamic acid,50,0.5748,0.717,HGHB
+61,flowcyto_50_l09_E8,glutamic acid,50,0.3179,2.192,LGHB
+62,flowcyto_50_l09_B8,glutamic acid,50,0.3529,0.9973,LGHB
+63,flowcyto_50_l10_G5,glutamic acid,50,0.3698,1.3361,LGHB
+64,flowcyto_50_l07_F10,glutamic acid,50,0.3765,1.2177,LGHB
+65,flowcyto_50_l07_B6,glutamic acid,50,0.3523,1.1345,LGHB
+66,flowcyto_50_l10_C8,glutamic acid,50,0.2844,0.6212,LGHB
+71,flowcyto_50_l10_E3,glutamic acid,50,0.3219,0.228,LGLB
+72,flowcyto_50_l07_D3,glutamic acid,50,0.3214,0.2765,LGLB
+73,flowcyto_50_l10_F5,glutamic acid,50,0.3175,0.2347,LGLB
+74,flowcyto_50_l10_C5,glutamic acid,50,0.2937,0.2795,LGLB
+75,flowcyto_50_l06_D7,glutamic acid,50,0.2904,0.1787,LGLB
+76,flowcyto_50_l06_F10,glutamic acid,50,0.2418,0.19,LGLB
+81,flowcyto_100_l12_F2,glutamic acid,100,0.7076,0.3157,HGLB
+82,flowcyto_100_l14_B2,glutamic acid,100,0.6133,0.3783,HGLB
+83,flowcyto_100_l12_G9,glutamic acid,100,0.6089,0.3586,HGLB
+84,flowcyto_100_l11_G8,glutamic acid,100,0.5851,0.3824,HGLB
+85,flowcyto_100_l11_B3,glutamic acid,100,0.5681,0.3729,HGLB
+86,flowcyto_100_l14_G2,glutamic acid,100,0.5497,0.2651,HGLB
+91,flowcyto_100_l15_G2,glutamic acid,100,0.4535,3.4117,HGHB
+92,flowcyto_100_l13_D2,glutamic acid,100,0.4335,1.7236,HGHB
+93,flowcyto_100_l12_G5,glutamic acid,100,0.4694,2.3099,HGHB
+94,flowcyto_100_l13_G7,glutamic acid,100,0.5027,2.0388,HGHB
+95,flowcyto_100_l12_G10,glutamic acid,100,0.6764,1.0169,HGHB
+96,flowcyto_100_l11_G2,glutamic acid,100,0.8185,0.6884,HGHB
+101,flowcyto_100_l15_B2,glutamic acid,100,0.3422,7.0623,LGHB
+102,flowcyto_100_l14_C10,glutamic acid,100,0.2214,2.0989,LGHB
+103,flowcyto_100_l15_E4,glutamic acid,100,0.2805,2.0109,LGHB
+104,flowcyto_100_l11_B6,glutamic acid,100,0.3377,1.6668,LGHB
+105,flowcyto_100_l15_B4,glutamic acid,100,0.324,1.3274,LGHB
+106,flowcyto_100_l12_B7,glutamic acid,100,0.2929,1.1386,LGHB
+111,flowcyto_100_l11_F9,glutamic acid,100,0.2572,0.2884,LGLB
+112,flowcyto_100_l12_E7,glutamic acid,100,0.2556,0.2826,LGLB
+113,flowcyto_100_l14_D8,glutamic acid,100,0.2554,0.3124,LGLB
+114,flowcyto_100_l12_C9,glutamic acid,100,0.2535,0.3151,LGLB
+115,flowcyto_100_l12_C10,glutamic acid,100,0.2498,0.2691,LGLB
+116,flowcyto_100_l12_C7,glutamic acid,100,0.2622,0.2512,LGLB
+121,flowcyto_250_l20_D8,glutamic acid,250,0.5715,0.382,HGLB
+122,flowcyto_250_l20_E7,glutamic acid,250,0.5634,0.3853,HGLB
+123,flowcyto_250_l18_G2,glutamic acid,250,0.5552,0.4273,HGLB
+124,flowcyto_250_l20_C3,glutamic acid,250,0.5501,0.426,HGLB
+125,flowcyto_250_l20_E9,glutamic acid,250,0.5434,0.4157,HGLB
+126,flowcyto_250_l19_F2,glutamic acid,250,0.5409,0.4048,HGLB
+131,flowcyto_250_l20_G3,glutamic acid,250,0.7607,0.8384,HGHB
+132,flowcyto_250_l20_G11,glutamic acid,250,0.6904,1.0224,HGHB
+133,flowcyto_250_l19_G2,glutamic acid,250,0.6369,1.087,HGHB
+134,flowcyto_250_l20_E4,glutamic acid,250,0.4796,6.0333,HGHB
+135,flowcyto_250_l18_G11,glutamic acid,250,0.548,2.3719,HGHB
+136,flowcyto_250_l20_B11,glutamic acid,250,0.488,1.6691,HGHB
+141,flowcyto_250_l17_E10,glutamic acid,250,0.3351,1.1455,LGHB
+142,flowcyto_250_l16_B7,glutamic acid,250,0.26,1.5016,LGHB
+143,flowcyto_250_l17_C4,glutamic acid,250,0.2853,1.3901,LGHB
+144,flowcyto_250_l16_F8,glutamic acid,250,0.2944,1.3114,LGHB
+145,flowcyto_250_l20_E3,glutamic acid,250,0.2834,1.203,LGHB
+146,flowcyto_250_l16_C11,glutamic acid,250,0.2515,1.1753,LGHB
+151,flowcyto_250_l17_E3,glutamic acid,250,0.2783,0.2773,LGLB
+152,flowcyto_250_l17_C8,glutamic acid,250,0.2491,0.3281,LGLB
+153,flowcyto_250_l18_D5,glutamic acid,250,0.2362,0.3421,LGLB
+154,flowcyto_250_l18_D8,glutamic acid,250,0.2034,0.3728,LGLB
+155,flowcyto_250_l16_E9,glutamic acid,250,0.2653,0.3354,LGLB
+156,flowcyto_250_l19_D8,glutamic acid,250,0.2571,0.27,LGLB
+161,flowcyto_10_x02_G11,cellobiose,10,0.7873,0.1896,HGLB
+162,flowcyto_10_x03_B4,cellobiose,10,0.7053,0.1879,HGLB
+163,flowcyto_10_x02_F3,cellobiose,10,0.6973,0.1624,HGLB
+164,flowcyto_10_x03_F10,cellobiose,10,0.6797,0.1635,HGLB
+165,flowcyto_10_x03_G7,cellobiose,10,0.6679,0.1462,HGLB
+166,flowcyto_10_x02_B9,cellobiose,10,0.6444,0.172,HGLB
+171,flowcyto_10_x03_B5,cellobiose,10,0.4224,3.7906,HGHB
+172,flowcyto_10_x04_E7,cellobiose,10,0.5285,0.8037,HGHB
+173,flowcyto_10_x02_C3,cellobiose,10,0.5359,2.8118,HGHB
+174,flowcyto_10_x05_G11,cellobiose,10,0.4685,1.8801,HGHB
+175,flowcyto_10_x02_B2,cellobiose,10,0.6367,1.0346,HGHB
+176,flowcyto_10_x04_C11,cellobiose,10,0.8537,0.8617,HGHB
+181,flowcyto_10_x02_F2,cellobiose,10,0.1568,3.4978,LGHB
+182,flowcyto_10_x05_G8,cellobiose,10,0.2224,1.4913,LGHB
+183,flowcyto_10_x05_D2,cellobiose,10,0.2492,1.2741,LGHB
+184,flowcyto_10_x04_E3,cellobiose,10,0.2393,1.0117,LGHB
+185,flowcyto_10_x03_B3,cellobiose,10,0.1229,0.9106,LGHB
+186,flowcyto_10_x05_B6,cellobiose,10,0.1518,0.8687,LGHB
+191,flowcyto_10_x04_D7,cellobiose,10,0.1164,0.2126,LGLB
+192,flowcyto_10_x01_F8,cellobiose,10,0.1132,0.2456,LGLB
+193,flowcyto_10_x04_E9,cellobiose,10,0.1128,0.1802,LGLB
+194,flowcyto_10_x04_C8,cellobiose,10,0.1079,0.2264,LGLB
+195,flowcyto_10_x04_F6,cellobiose,10,0.102,0.2083,LGLB
+196,flowcyto_10_x03_E5,cellobiose,10,0.1246,0.2143,LGLB
+201,flowcyto_50_x08_G10,cellobiose,50,0.878,0.2144,HGLB
+202,flowcyto_50_x06_B10,cellobiose,50,0.722,0.2248,HGLB
+203,flowcyto_50_x10_F2,cellobiose,50,0.6768,0.1387,HGLB
+204,flowcyto_50_x09_G3,cellobiose,50,0.6641,0.1993,HGLB
+205,flowcyto_50_x06_B11,cellobiose,50,0.6628,0.1591,HGLB
+206,flowcyto_50_x10_G2,cellobiose,50,0.648,0.2393,HGLB
+211,flowcyto_50_x10_G6,cellobiose,50,0.5867,16.9701,HGHB
+212,flowcyto_50_x09_G8,cellobiose,50,0.7654,2.1788,HGHB
+213,flowcyto_50_x08_G11,cellobiose,50,0.6795,1.986,HGHB
+214,flowcyto_50_x08_G9,cellobiose,50,0.566,1.4777,HGHB
+215,flowcyto_50_x06_E7,cellobiose,50,0.6408,1.4274,HGHB
+216,flowcyto_50_x06_F4,cellobiose,50,0.5995,1.2372,HGHB
+221,flowcyto_50_x09_E8,cellobiose,50,0.1984,8.3685,LGHB
+222,flowcyto_50_x09_E9,cellobiose,50,0.2824,3.9449,LGHB
+223,flowcyto_50_x06_F11,cellobiose,50,0.2623,3.8561,LGHB
+224,flowcyto_50_x10_B5,cellobiose,50,0.3216,2.9626,LGHB
+225,flowcyto_50_x08_D4,cellobiose,50,0.3375,3.6759,LGHB
+226,flowcyto_50_x07_C10,cellobiose,50,0.1811,3.6695,LGHB
+231,flowcyto_50_x07_E4,cellobiose,50,0.2185,0.185,LGLB
+232,flowcyto_50_x06_E8,cellobiose,50,0.188,0.2627,LGLB
+233,flowcyto_50_x09_D9,cellobiose,50,0.1852,0.3309,LGLB
+234,flowcyto_50_x07_C6,cellobiose,50,0.1709,0.384,LGLB
+235,flowcyto_50_x08_C5,cellobiose,50,0.1664,0.2888,LGLB
+236,flowcyto_50_x10_D5,cellobiose,50,0.2351,0.1655,LGLB
+241,flowcyto_100_x14_B9,cellobiose,100,0.8256,0.2883,HGLB
+242,flowcyto_100_x12_C7,cellobiose,100,0.8027,0.3393,HGLB
+243,flowcyto_100_x13_F2,cellobiose,100,0.8022,0.3477,HGLB
+244,flowcyto_100_x14_F8,cellobiose,100,0.7654,0.3379,HGLB
+245,flowcyto_100_x12_F5,cellobiose,100,0.7638,0.3718,HGLB
+246,flowcyto_100_x13_G5,cellobiose,100,0.7526,0.3201,HGLB
+251,flowcyto_100_x12_D9,cellobiose,100,0.5641,2.0909,HGHB
+252,flowcyto_100_x14_F10,cellobiose,100,0.6549,2.0656,HGHB
+253,flowcyto_100_x14_C6,cellobiose,100,0.5808,2.0073,HGHB
+254,flowcyto_100_x11_G9,cellobiose,100,0.6167,1.926,HGHB
+255,flowcyto_100_x15_E5,cellobiose,100,1.0275,0.9313,HGHB
+256,flowcyto_100_x12_F11,cellobiose,100,0.7652,1.0304,HGHB
+261,flowcyto_100_x13_F6,cellobiose,100,0.2579,4.326,LGHB
+262,flowcyto_100_x11_E9,cellobiose,100,0.4239,1.8465,LGHB
+263,flowcyto_100_x11_C11,cellobiose,100,0.2866,1.0515,LGHB
+264,flowcyto_100_x12_D10,cellobiose,100,0.2548,1.6628,LGHB
+265,flowcyto_100_x11_F4,cellobiose,100,0.3185,1.4831,LGHB
+266,flowcyto_100_x11_D3,cellobiose,100,0.2624,1.3822,LGHB
+271,flowcyto_100_x12_C4,cellobiose,100,0.2727,0.2934,LGLB
+272,flowcyto_100_x12_E9,cellobiose,100,0.271,0.3595,LGLB
+273,flowcyto_100_x11_D10,cellobiose,100,0.3118,0.3286,LGLB
+274,flowcyto_100_x12_B5,cellobiose,100,0.2915,0.2477,LGLB
+275,flowcyto_100_x15_G10,cellobiose,100,0.2903,0.3228,LGLB
+276,flowcyto_100_x12_F10,cellobiose,100,0.2847,0.2961,LGLB
+281,flowcyto_250_x18_G10,cellobiose,250,0.8232,0.4393,HGLB
+282,flowcyto_250_x20_G9,cellobiose,250,0.8159,0.5171,HGLB
+283,flowcyto_250_x16_E2,cellobiose,250,0.7758,0.4054,HGLB
+284,flowcyto_250_x20_E6,cellobiose,250,0.7697,0.3984,HGLB
+285,flowcyto_250_x20_B5,cellobiose,250,0.7678,0.2704,HGLB
+286,flowcyto_250_x18_B6,cellobiose,250,0.7365,0.1852,HGLB
+291,flowcyto_250_x17_F2,cellobiose,250,0.7036,2.6648,HGHB
+292,flowcyto_250_x20_B2,cellobiose,250,0.7098,2.0748,HGHB
+293,flowcyto_250_x19_E6,cellobiose,250,0.7099,1.7359,HGHB
+294,flowcyto_250_x19_B3,cellobiose,250,0.725,1.5114,HGHB
+295,flowcyto_250_x16_B3,cellobiose,250,0.858,1.3871,HGHB
+296,flowcyto_250_x18_B9,cellobiose,250,0.7951,1.468,HGHB
+301,flowcyto_250_x20_F7,cellobiose,250,0.4989,2.9194,LGHB
+302,flowcyto_250_x16_G9,cellobiose,250,0.357,2.8125,LGHB
+303,flowcyto_250_x17_C6,cellobiose,250,0.2332,1.3583,LGHB
+304,flowcyto_250_x18_E4,cellobiose,250,0.4466,2.2751,LGHB
+305,flowcyto_250_x19_C11,cellobiose,250,0.2893,2.177,LGHB
+306,flowcyto_250_x17_B7,cellobiose,250,0.331,1.5821,LGHB
+311,flowcyto_250_x17_B10,cellobiose,250,0.337,0.4698,LGLB
+312,flowcyto_250_x20_B10,cellobiose,250,0.3204,0.288,LGLB
+313,flowcyto_250_x19_F11,cellobiose,250,0.3116,0.4056,LGLB
+314,flowcyto_250_x18_C9,cellobiose,250,0.2829,0.2185,LGLB
+315,flowcyto_250_x18_C11,cellobiose,250,0.3776,0.2635,LGLB
+316,flowcyto_250_x17_C4,cellobiose,250,0.3726,0.1975,LGLB
+321,flowcyto_10_g05_G4,mannitol,10,0.9959,0.2223,HGLB
+322,flowcyto_10_g04_G2,mannitol,10,0.899,0.2297,HGLB
+323,flowcyto_10_g05_G3,mannitol,10,0.8205,0.2005,HGLB
+324,flowcyto_10_g05_B7,mannitol,10,0.7317,0.221,HGLB
+325,flowcyto_10_g04_F4,mannitol,10,0.7652,0.177,HGLB
+326,flowcyto_10_g04_C2,mannitol,10,0.7446,0.2287,HGLB
+331,flowcyto_10_g04_G11,mannitol,10,0.6025,1.3642,HGHB
+332,flowcyto_10_g02_D11,mannitol,10,0.5994,1.3091,HGHB
+333,flowcyto_10_g03_E11,mannitol,10,0.727,1.2447,HGHB
+334,flowcyto_10_g03_G11,mannitol,10,0.7688,0.9103,HGHB
+335,flowcyto_10_g04_C3,mannitol,10,0.7986,1.008,HGHB
+336,flowcyto_10_g02_G4,mannitol,10,0.8663,0.8992,HGHB
+341,flowcyto_10_g04_G9,mannitol,10,0.4815,9.5172,LGHB
+342,flowcyto_10_g04_F5,mannitol,10,0.4231,3.0201,LGHB
+343,flowcyto_10_g04_C4,mannitol,10,0.4434,2.0097,LGHB
+344,flowcyto_10_g03_D10,mannitol,10,0.333,1.964,LGHB
+345,flowcyto_10_g02_G11,mannitol,10,0.4932,1.7056,LGHB
+346,flowcyto_10_g02_G2,mannitol,10,0.4503,1.5595,LGHB
+351,flowcyto_10_g05_B9,mannitol,10,0.4406,0.2273,LGLB
+352,flowcyto_10_g05_C11,mannitol,10,0.4334,0.1854,LGLB
+353,flowcyto_10_g05_B2,mannitol,10,0.3371,0.1362,LGLB
+354,flowcyto_10_g04_E10,mannitol,10,0.3221,0.1531,LGLB
+355,flowcyto_10_g04_F7,mannitol,10,0.3041,0.1969,LGLB
+356,flowcyto_10_g03_B4,mannitol,10,0.2866,0.1716,LGLB
+361,flowcyto_50_g07_F2,mannitol,50,0.654,0.1869,HGLB
+362,flowcyto_50_g09_G11,mannitol,50,0.7421,0.2277,HGLB
+363,flowcyto_50_g10_F3,mannitol,50,0.7261,0.2672,HGLB
+364,flowcyto_50_g06_G9,mannitol,50,0.6887,0.2238,HGLB
+365,flowcyto_50_g10_F5,mannitol,50,0.6826,0.1715,HGLB
+366,flowcyto_50_g07_G4,mannitol,50,0.6293,0.2028,HGLB
+371,flowcyto_50_g10_B5,mannitol,50,0.5486,2.9024,HGHB
+372,flowcyto_50_g08_G11,mannitol,50,0.5632,1.7923,HGHB
+373,flowcyto_50_g06_F11,mannitol,50,0.5771,1.5725,HGHB
+374,flowcyto_50_g07_D2,mannitol,50,0.6136,1.2256,HGHB
+375,flowcyto_50_g06_E8,mannitol,50,0.7105,1.2237,HGHB
+376,flowcyto_50_g08_G8,mannitol,50,0.6251,1.1625,HGHB
+381,flowcyto_50_g10_F4,mannitol,50,0.4943,3.6753,LGHB
+382,flowcyto_50_g07_E10,mannitol,50,0.4754,2.8502,LGHB
+383,flowcyto_50_g07_C6,mannitol,50,0.4194,2.0602,LGHB
+384,flowcyto_50_g09_B4,mannitol,50,0.3728,2.3426,LGHB
+385,flowcyto_50_g08_F2,mannitol,50,0.3672,2.0272,LGHB
+386,flowcyto_50_g10_E11,mannitol,50,0.2972,1.8327,LGHB
+391,flowcyto_50_g10_B10,mannitol,50,0.3985,0.2363,LGLB
+392,flowcyto_50_g06_G2,mannitol,50,0.3964,0.1755,LGLB
+393,flowcyto_50_g07_C5,mannitol,50,0.3942,0.2405,LGLB
+394,flowcyto_50_g10_F6,mannitol,50,0.3862,0.2217,LGLB
+395,flowcyto_50_g06_D5,mannitol,50,0.3366,0.2003,LGLB
+396,flowcyto_50_g09_F5,mannitol,50,0.2759,0.2855,LGLB
+401,flowcyto_100_g14_B7,mannitol,100,0.7068,0.2,HGLB
+402,flowcyto_100_g13_B10,mannitol,100,0.6624,0.2867,HGLB
+403,flowcyto_100_g13_B8,mannitol,100,0.6334,0.2377,HGLB
+404,flowcyto_100_g12_F10,mannitol,100,0.6321,0.1889,HGLB
+405,flowcyto_100_g14_B9,mannitol,100,0.6282,0.1925,HGLB
+406,flowcyto_100_g14_C5,mannitol,100,0.6012,0.2189,HGLB
+411,flowcyto_100_g15_B9,mannitol,100,0.5486,6.5709,HGHB
+412,flowcyto_100_g14_F11,mannitol,100,0.5138,1.8878,HGHB
+413,flowcyto_100_g11_B8,mannitol,100,0.6352,1.4863,HGHB
+414,flowcyto_100_g14_G10,mannitol,100,0.6706,1.075,HGHB
+415,flowcyto_100_g13_G6,mannitol,100,0.6067,1.3859,HGHB
+416,flowcyto_100_g12_D3,mannitol,100,0.6878,1.031,HGHB
+421,flowcyto_100_g15_F4,mannitol,100,0.4011,2.3636,LGHB
+422,flowcyto_100_g12_G8,mannitol,100,0.3276,1.7161,LGHB
+423,flowcyto_100_g12_D11,mannitol,100,0.425,1.4098,LGHB
+424,flowcyto_100_g15_C2,mannitol,100,0.3985,1.385,LGHB
+425,flowcyto_100_g14_E3,mannitol,100,0.4245,1.3796,LGHB
+426,flowcyto_100_g14_G2,mannitol,100,0.3308,1.3559,LGHB
+431,flowcyto_100_g13_D5,mannitol,100,0.4237,0.2493,LGLB
+432,flowcyto_100_g13_F6,mannitol,100,0.4209,0.2525,LGLB
+433,flowcyto_100_g15_C8,mannitol,100,0.4065,0.2713,LGLB
+434,flowcyto_100_g14_D11,mannitol,100,0.4454,0.193,LGLB
+435,flowcyto_100_g13_E2,mannitol,100,0.3875,0.27,LGLB
+436,flowcyto_100_g12_C8,mannitol,100,0.3741,0.2823,LGLB
+441,flowcyto_250_g16_F10,mannitol,250,0.6494,0.3051,HGLB
+442,flowcyto_250_g19_G2,mannitol,250,0.7447,0.4034,HGLB
+443,flowcyto_250_g19_G4,mannitol,250,0.7311,0.4399,HGLB
+444,flowcyto_250_g17_G10,mannitol,250,0.7291,0.2726,HGLB
+445,flowcyto_250_g19_G11,mannitol,250,0.716,0.2894,HGLB
+446,flowcyto_250_g16_F2,mannitol,250,0.6535,0.292,HGLB
+451,flowcyto_250_g20_G9,mannitol,250,0.5575,2.4191,HGHB
+452,flowcyto_250_g20_B9,mannitol,250,0.705,0.7333,HGHB
+453,flowcyto_250_g18_G3,mannitol,250,0.5383,1.2779,HGHB
+454,flowcyto_250_g18_G11,mannitol,250,0.6779,1.2625,HGHB
+455,flowcyto_250_g20_G3,mannitol,250,0.7199,0.7876,HGHB
+456,flowcyto_250_g17_F4,mannitol,250,0.6479,0.9412,HGHB
+461,flowcyto_250_g16_C4,mannitol,250,0.2705,3.8734,LGHB
+462,flowcyto_250_g19_B11,mannitol,250,0.4472,2.1271,LGHB
+463,flowcyto_250_g20_F10,mannitol,250,0.4191,1.9072,LGHB
+464,flowcyto_250_g18_C2,mannitol,250,0.4409,1.8054,LGHB
+465,flowcyto_250_g20_E2,mannitol,250,0.4358,1.7498,LGHB
+466,flowcyto_250_g16_C11,mannitol,250,0.3543,1.4264,LGHB
+471,flowcyto_250_g17_D5,mannitol,250,0.3909,0.3741,LGLB
+472,flowcyto_250_g19_B2,mannitol,250,0.3702,0.2899,LGLB
+473,flowcyto_250_g16_D8,mannitol,250,0.369,0.4302,LGLB
+474,flowcyto_250_g20_E11,mannitol,250,0.3663,0.3393,LGLB
+475,flowcyto_250_g20_E7,mannitol,250,0.3535,0.4019,LGLB
+476,flowcyto_250_g17_D4,mannitol,250,0.3349,0.3806,LGLB
+481,flowcyto_10_h05_G4,trehalose,10,0.963,0.3433,HGLB
+482,flowcyto_10_h01_D4,trehalose,10,0.9617,0.3492,HGLB
+483,flowcyto_10_h04_C3,trehalose,10,0.8943,0.3224,HGLB
+484,flowcyto_10_h01_E10,trehalose,10,0.8019,0.2406,HGLB
+485,flowcyto_10_h05_F2,trehalose,10,0.7995,0.199,HGLB
+486,flowcyto_10_h02_D10,trehalose,10,0.8216,0.2799,HGLB
+491,flowcyto_10_h05_D5,trehalose,10,0.6598,3.9875,HGHB
+492,flowcyto_10_h02_E7,trehalose,10,0.8511,2.0122,HGHB
+493,flowcyto_10_h01_F6,trehalose,10,0.7888,1.6746,HGHB
+494,flowcyto_10_h04_E3,trehalose,10,0.7611,1.6619,HGHB
+495,flowcyto_10_h04_B7,trehalose,10,0.9539,0.9019,HGHB
+496,flowcyto_10_h05_B6,trehalose,10,1.0264,0.9153,HGHB
+501,flowcyto_10_h05_C5,trehalose,10,0.1863,6.9846,LGHB
+502,flowcyto_10_h02_C2,trehalose,10,0.4424,3.933,LGHB
+503,flowcyto_10_h04_E11,trehalose,10,0.2806,3.6672,LGHB
+504,flowcyto_10_h03_E3,trehalose,10,0.4028,3.044,LGHB
+505,flowcyto_10_h02_F7,trehalose,10,0.4096,3.0083,LGHB
+506,flowcyto_10_h04_G9,trehalose,10,0.2279,2.2273,LGHB
+511,flowcyto_10_h04_F7,trehalose,10,0.1437,0.3659,LGLB
+512,flowcyto_10_h05_F10,trehalose,10,0.2344,0.2691,LGLB
+513,flowcyto_10_h03_F9,trehalose,10,0.225,0.3745,LGLB
+514,flowcyto_10_h05_F9,trehalose,10,0.21,0.2437,LGLB
+515,flowcyto_10_h04_E9,trehalose,10,0.1761,0.3302,LGLB
+516,flowcyto_10_h03_F3,trehalose,10,0.162,0.2689,LGLB
+521,flowcyto_50_h08_C4,trehalose,50,0.9341,0.4142,HGLB
+522,flowcyto_50_h08_E5,trehalose,50,0.9022,0.2803,HGLB
+523,flowcyto_50_h07_D2,trehalose,50,0.8884,0.3865,HGLB
+524,flowcyto_50_h06_G3,trehalose,50,0.8211,0.4139,HGLB
+525,flowcyto_50_h09_C6,trehalose,50,0.8037,0.2274,HGLB
+526,flowcyto_50_h06_B5,trehalose,50,0.7962,0.2385,HGLB
+531,flowcyto_50_h10_G6,trehalose,50,0.7036,2.8632,HGHB
+532,flowcyto_50_h10_D9,trehalose,50,0.7106,2.7971,HGHB
+533,flowcyto_50_h07_G11,trehalose,50,0.7099,2.2497,HGHB
+534,flowcyto_50_h07_F2,trehalose,50,0.6327,2.1751,HGHB
+535,flowcyto_50_h09_D3,trehalose,50,0.8682,1.5086,HGHB
+536,flowcyto_50_h08_E11,trehalose,50,1.0489,1.2776,HGHB
+541,flowcyto_50_h08_E8,trehalose,50,0.4986,7.3689,LGHB
+542,flowcyto_50_h08_F9,trehalose,50,0.4685,6.6318,LGHB
+543,flowcyto_50_h07_D10,trehalose,50,0.2403,3.0756,LGHB
+544,flowcyto_50_h10_F4,trehalose,50,0.4586,2.5498,LGHB
+545,flowcyto_50_h10_D8,trehalose,50,0.4589,2.2381,LGHB
+546,flowcyto_50_h09_F11,trehalose,50,0.4608,2.0878,LGHB
+551,flowcyto_50_h08_C7,trehalose,50,0.4431,0.2619,LGLB
+552,flowcyto_50_h09_C11,trehalose,50,0.4394,0.4488,LGLB
+553,flowcyto_50_h08_C3,trehalose,50,0.4352,0.308,LGLB
+554,flowcyto_50_h07_D3,trehalose,50,0.3738,0.4011,LGLB
+555,flowcyto_50_h07_C4,trehalose,50,0.3451,0.4399,LGLB
+556,flowcyto_50_h06_G8,trehalose,50,0.3228,0.3208,LGLB
+561,flowcyto_100_h14_G9,trehalose,100,0.9364,0.4113,HGLB
+562,flowcyto_100_h12_B8,trehalose,100,0.8478,0.3985,HGLB
+563,flowcyto_100_h14_D9,trehalose,100,0.7674,0.3976,HGLB
+564,flowcyto_100_h12_E5,trehalose,100,0.759,0.394,HGLB
+565,flowcyto_100_h14_G7,trehalose,100,0.7577,0.398,HGLB
+566,flowcyto_100_h11_E2,trehalose,100,0.745,0.4347,HGLB
+571,flowcyto_100_h11_F7,trehalose,100,0.7113,3.1873,HGHB
+572,flowcyto_100_h13_E10,trehalose,100,0.6205,2.4218,HGHB
+573,flowcyto_100_h15_F9,trehalose,100,0.7001,2.4033,HGHB
+574,flowcyto_100_h12_F5,trehalose,100,0.6047,2.187,HGHB
+575,flowcyto_100_h13_G7,trehalose,100,0.865,1.5611,HGHB
+576,flowcyto_100_h11_C6,trehalose,100,1.0408,1.0273,HGHB
+581,flowcyto_100_h14_B3,trehalose,100,0.4774,2.519,LGHB
+582,flowcyto_100_h11_E4,trehalose,100,0.4271,2.3038,LGHB
+583,flowcyto_100_h11_F6,trehalose,100,0.3823,2.2777,LGHB
+584,flowcyto_100_h13_D2,trehalose,100,0.4925,2.0407,LGHB
+585,flowcyto_100_h15_G3,trehalose,100,0.3414,1.3629,LGHB
+586,flowcyto_100_h13_B10,trehalose,100,0.5078,1.7525,LGHB
+591,flowcyto_100_h11_E6,trehalose,100,0.4954,0.395,LGLB
+592,flowcyto_100_h14_E10,trehalose,100,0.4874,0.4268,LGLB
+593,flowcyto_100_h13_C8,trehalose,100,0.4799,0.416,LGLB
+594,flowcyto_100_h11_E11,trehalose,100,0.4778,0.3878,LGLB
+595,flowcyto_100_h13_E4,trehalose,100,0.3499,0.4425,LGLB
+596,flowcyto_100_h12_G4,trehalose,100,0.2834,0.4139,LGLB
+601,flowcyto_250_h18_B7,trehalose,250,0.8449,0.6334,HGLB
+602,flowcyto_250_h16_C7,trehalose,250,0.8043,0.4703,HGLB
+603,flowcyto_250_h17_B8,trehalose,250,0.7684,0.4431,HGLB
+604,flowcyto_250_h19_E5,trehalose,250,0.7653,0.502,HGLB
+605,flowcyto_250_h17_D9,trehalose,250,0.7322,0.4944,HGLB
+606,flowcyto_250_h18_C9,trehalose,250,0.7148,0.4632,HGLB
+611,flowcyto_250_h20_E8,trehalose,250,0.6931,3.5823,HGHB
+612,flowcyto_250_h20_E7,trehalose,250,0.6472,3.5035,HGHB
+613,flowcyto_250_h17_G7,trehalose,250,0.7486,2.4678,HGHB
+614,flowcyto_250_h19_B7,trehalose,250,0.6205,2.1379,HGHB
+615,flowcyto_250_h16_G3,trehalose,250,0.7898,1.5389,HGHB
+616,flowcyto_250_h16_F7,trehalose,250,0.8352,1.4794,HGHB
+621,flowcyto_250_h18_G5,trehalose,250,0.5037,3.9044,LGHB
+622,flowcyto_250_h20_G6,trehalose,250,0.4912,3.6833,LGHB
+623,flowcyto_250_h19_C6,trehalose,250,0.3698,3.6097,LGHB
+624,flowcyto_250_h20_C4,trehalose,250,0.5113,3.5822,LGHB
+625,flowcyto_250_h19_E2,trehalose,250,0.4792,3.4483,LGHB
+626,flowcyto_250_h17_D5,trehalose,250,0.3232,3.1978,LGHB
+631,flowcyto_250_h20_D4,trehalose,250,0.3822,0.4545,LGLB
+632,flowcyto_250_h20_C6,trehalose,250,0.3757,0.5041,LGLB
+633,flowcyto_250_h19_D8,trehalose,250,0.3616,0.4815,LGLB
+634,flowcyto_250_h16_B2,trehalose,250,0.3454,0.631,LGLB
+635,flowcyto_250_h18_F11,trehalose,250,0.3408,0.612,LGLB
+636,flowcyto_250_h20_F7,trehalose,250,0.3092,0.5178,LGLB

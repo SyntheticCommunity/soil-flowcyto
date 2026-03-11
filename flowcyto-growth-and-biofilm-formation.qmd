@@ -1,0 +1,686 @@
+
+# 流式分选生长情况及生物膜分析
+
+对生物膜的形成及生长动态以及细胞数量变化进行了差异分析，并选取具有代表性的样品进行后续测序分析。
+
+## 2024年07月17日数据
+
+此次分析使用的数据为流式分选的生长情况以及生物膜生物量（2024年7月17日数据）。实验中，测量了8种碳源1-7天的生长情况，其中4种为常规碳源，4种为植物类碳源。在7-14天只测量了常规碳源的生长情况，并测定了第7天和第14天生物膜的生物量。
+ 
+### 加载需要的包
+
+```{r}
+library(tidyverse)
+library(ggpubr)
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(dunn.test)
+library(multcompView)
+library(MASS)
+library(ggforce)
+library(ggplot2)
+library(patchwork)
+library(cowplot)
+library(export)
+```
+ 
+ 
+### 读取保存的数据
+
+读取预处理后保存的数据。根据需要，对数据进行操作。这个数据一共 8 列，分别是：
+
+- `class`：获取土壤合成菌群的途径。分别是微液滴（`droplet`）和流式细胞分选（`flowcyto`）。
+- `measure`：测量的指标。分别是生长数据（OD600，`growth`）和生物膜生物量（`biofilm`）。
+- `cell_num`：初始细胞的数目。分别是 10/20/50/250。
+- `carbon`：碳源的类型。分别是海藻糖 (`trehalose`)、甘露醇 (`mannitol`)、纤维二糖 (`cellobiose`)、谷氨酸 (`glutamic acid`)、阿魏酸 (`ferulic acid`)、高丝氨酸 (`homoserine`)、柠檬酸 (`citric acid`)、水杨酸 (`salicylic acid`)。前四种是常规碳源，后四种是植物来源碳源。
+- `time`：培养时间。一共 14 天。生长实验进行了 2 个批次，在第 7 天转接到新的新鲜培养基中继续培养 7 天。每个批次结束时，使用结晶紫染色测量菌群的生物膜生物量（因此生物膜生物量仅有第 7 天和第 14 天的数据）。
+- `plate`：平板编号。编号以碳源和测试天数命名，如 `h01` 指的是海藻糖第 1 天的数据。
+- `well_position`：96 孔板中的孔位。取值范围从 `A01` 到 `H12`。
+- `value`：测量的数值。如果是生长数据则为 OD600，如果是生物膜数据则为 OD595（结晶紫染色后测量）。
+
+```{r}
+# 读取保存的数据
+all_data = read_csv("data/20240717_all_data.csv")
+sample_n(all_data, 10)
+```
+
+这里，为了能够将生长数据和生物膜数据一一对应，我们首先基于 `class`、`cell_num` 等创建了一个新的列 `well_id`。这是每个孔对应的唯一编号。
+
+```{r}
+# 新建 plate_id/well_id，供对照分析生物膜和生长数据时使用
+all_data = all_data |> 
+ tidyr::unite(well_id, class, cell_num, plate, well_position, remove = FALSE)
+```
+
+对碳源的显示顺序、绘图使用的主题进行统一设置。
+
+```{r}
+# 碳源顺序
+carbon_lbl = c("trehalose","mannitol","cellobiose","glutamic acid","ferulic acid","homoserine","citric acid","salicylic acid")
+# 统一调整 cell_num 的显示顺序
+all_data = all_data |> 
+  mutate(cell_num = factor(cell_num, levels = c("10","50","100","250")),
+         carbon = factor(carbon, levels = carbon_lbl))
+
+# 统一设置 ggplot2 默认主题
+# theme_set(theme_minimal())
+theme_set(theme_bw())
+```
+
+将数据分为生长数据和生物膜数据。与此同时，分别检查生长和生物膜数据的完整性。这里如果有空缺值则会显示出来。
+
+```{r}
+growth_data = all_data |> filter(measure == "growth")
+growth_data |> filter(is.na(value))
+
+biofilm_data= all_data |> filter(measure == "biofilm")
+biofilm_data |> filter(is.na(value))
+```
+
+
+## 细胞数量增加促进生物膜形成但不增强生长表现
+
+随着细胞数的增加，生物膜形成显著增加，然而细胞的生长情况未表现出相应的上升趋势
+
+### 细胞数量的增加未导致群体生长水平的提升
+
+尽管观察到细胞数量持续增加，但群体的整体生长水平并未呈现相应的上升的显著差异。这一现象表明，细胞密度的增加并不一定直接促进群落的生长活性。
+
+```{r}
+# 假设 growth_data 已加载
+flowcyto_growth_data <- growth_data %>%
+  filter(time == 16, class == "flowcyto", carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid"))
+
+# 1. 因子化
+flowcyto_biofilm_data <- flowcyto_growth_data %>%
+  mutate(cell_num = as.factor(cell_num))
+
+# 2. 去掉每个组的箱线异常值
+trimmed <- flowcyto_biofilm_data %>%
+  group_by(carbon, cell_num) %>%
+  filter(! value %in% boxplot.stats(value)$out) %>%
+  ungroup()
+
+biofilm_letters <- trimmed %>%
+  group_by(carbon) %>%
+  nest() %>%
+  mutate(
+    letters = map(data, ~ {
+      dat <- .x
+      kt <- kruskal.test(value ~ cell_num, data = dat)
+     
+      if (kt$p.value < 0.05) {
+        # Dunn's test
+        dres <- dunn.test(dat$value, dat$cell_num, method = "bonferroni")
+        comps <- strsplit(dres$comparisons, " - ")
+        pv <- dres$P.adjusted
+        names(pv) <- sapply(comps, paste, collapse = "-")
+        mc <- multcompLetters(pv, threshold = 0.05)$Letters
+        stats_list <- dat %>%
+          group_by(cell_num) %>%
+          summarise(
+            upper_whisker = boxplot.stats(value)$stats[5],
+            range = diff(range(value)),
+            .groups = "drop"
+          )
+        tibble(
+          cell_num = names(mc),
+          letter = unname(mc)
+        ) %>%
+        left_join(stats_list, by = "cell_num") %>%
+        mutate(y_pos = upper_whisker + 0.1 * range)
+       
+      } else {
+        # 不显著时返回 NA 占位
+        dat %>%
+          distinct(cell_num) %>%
+          mutate(letter = NA_character_, y_pos = NA_real_)
+      }
+    })
+  ) %>%
+  unnest(letters)
+
+# 4. 计算每个 carbon 面板的 Kruskal–Wallis p 值，并用科学计数法显示
+pvals_df <- trimmed %>%
+  group_by(carbon) %>%
+  summarise(
+    p.value = kruskal.test(value ~ cell_num)$p.value,
+    y = max(value, na.rm = TRUE) + 0.5,
+    .groups = "drop"
+  ) %>%
+  mutate(
+    p_label = ifelse(!is.na(p.value),
+                           paste("p =", format(p.value, digits = 2)),
+                           NA_character_)
+  )
+
+# 获取唯一的 carbon 值
+unique_carbons <- unique(trimmed$carbon)
+
+# 循环遍历每个 carbon，创建并打印单独图表
+for (carb in unique_carbons) {
+  # 子集数据
+  df_sub <- trimmed %>% filter(carbon == carb)
+  letters_sub <- biofilm_letters %>% filter(carbon == carb)
+  pval_sub <- pvals_df %>% filter(carbon == carb)
+ 
+  p <- ggplot(df_sub, aes(x = cell_num, y = value)) +
+    geom_boxplot(
+      outlier.shape = NA,
+      width = 0.6, # 箱宽从0.5调大到0.7
+      fill = "white",
+      color = "black"
+    ) +
+   
+    # Dunn 字母
+    geom_text(
+      data = letters_sub,
+      aes(x = cell_num, y = y_pos, label = letter),
+      inherit.aes = FALSE, vjust = 0, size = 6
+    ) +
+   
+    # p 值
+    geom_text(
+      data = pval_sub,
+      aes(x = 1.5, y = 1.75, label = p_label),
+      inherit.aes = FALSE, hjust = 0, vjust = 1,
+      size = 6, fontface = "italic"
+    ) +
+    facet_wrap(~ carbon, scales = "free_y") + # 强制保留facet_wrap，即使只有一个碳源
+    scale_y_continuous(
+    limits = c(0, 2),
+    breaks = seq(0, 2, by = 0.5),
+    expand = expansion(mult = c(0.1, 0.1))) +
+   
+    theme_bw() +
+    theme(
+      strip.text = element_text(face = "bold", size = 10),
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+      axis.text.y = element_text(angle = 45, hjust = 1, size = 12),
+      aspect.ratio = 1.2,
+      legend.position = "none" # 去掉每个图的图例
+    )+
+    labs(
+      x = "",
+      y = "Growth"
+    )
+ 
+  # 打印每个单独的图
+  print(p)
+  
+  #graph2ppt(x =p, file = "growth-biofilm.pptx" , append = TRUE)
+}
+```
+
+
+### 群落生物膜的形成量与细胞数量呈正相关
+
+随着细胞数量的增加，群落生物膜的形成量也显著上升，二者呈现正相关关系。这一趋势表明，较高的细胞密度可能有助于生物膜的累积或结构稳定性的增强，提示生物膜形成在一定程度上依赖于细胞间的协同作用或信号传导机制。（与功能预测呼应）
+
+```{r}
+# 假设 biofilm_data 已加载
+flowcyto_biofilm_data <- biofilm_data %>%
+  filter(time == 14, class == "flowcyto", carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid"))
+
+# 1. 因子化
+flowcyto_biofilm_data <- flowcyto_biofilm_data %>%
+  mutate(cell_num = as.factor(cell_num))
+
+# 2. 去掉每个组的箱线异常值
+trimmed <- flowcyto_biofilm_data %>%
+  group_by(carbon, cell_num) %>%
+  filter(! value %in% boxplot.stats(value)$out) %>%
+  ungroup()
+
+biofilm_letters <- trimmed %>%
+  group_by(carbon) %>%
+  nest() %>%
+  mutate(
+    letters = map(data, ~ {
+      dat <- .x
+      kt <- kruskal.test(value ~ cell_num, data = dat)
+     
+      if (kt$p.value < 0.05) {
+        # Dunn's test
+        dres <- dunn.test(dat$value, dat$cell_num, method = "bonferroni")
+        comps <- strsplit(dres$comparisons, " - ")
+        pv <- dres$P.adjusted
+        names(pv) <- sapply(comps, paste, collapse = "-")
+        mc <- multcompLetters(pv, threshold = 0.05)$Letters
+        stats_list <- dat %>%
+          group_by(cell_num) %>%
+          summarise(
+            upper_whisker = boxplot.stats(value)$stats[5],
+            range = diff(range(value)),
+            .groups = "drop"
+          )
+        tibble(
+          cell_num = names(mc),
+          letter = unname(mc)
+        ) %>%
+        left_join(stats_list, by = "cell_num") %>%
+        mutate(y_pos = upper_whisker + 0.1 * range)
+       
+      } else {
+        # 不显著时返回 NA 占位
+        dat %>%
+          distinct(cell_num) %>%
+          mutate(letter = NA_character_, y_pos = NA_real_)
+      }
+    })
+  ) %>%
+  unnest(letters)
+
+# 4. 计算每个 carbon 面板的 Kruskal–Wallis p 值，并用科学计数法显示
+pvals_df <- trimmed %>%
+  group_by(carbon) %>%
+  summarise(
+    p.value = kruskal.test(value ~ cell_num)$p.value,
+    y = max(value, na.rm = TRUE) + 0.5,
+    .groups = "drop"
+  ) %>%
+  mutate(
+    p_label = ifelse(!is.na(p.value),
+                           paste("p =", format(p.value, digits = 2)),
+                           NA_character_)
+  )
+
+# 获取唯一的 carbon 值
+unique_carbons <- unique(trimmed$carbon)
+
+# 循环遍历每个 carbon，创建并打印单独图表
+for (carb in unique_carbons) {
+  # 子集数据
+  df_sub <- trimmed %>% filter(carbon == carb)
+  letters_sub <- biofilm_letters %>% filter(carbon == carb)
+  pval_sub <- pvals_df %>% filter(carbon == carb)
+ 
+  p <- ggplot(df_sub, aes(x = cell_num, y = value)) +
+    geom_boxplot(
+      outlier.shape = NA,
+      width = 0.6, # 箱宽从0.5调大到0.7
+      fill = "white",
+      color = "black"
+    ) +
+   
+    # Dunn 字母
+    geom_text(
+      data = letters_sub,
+      aes(x = cell_num, y = y_pos, label = letter),
+      inherit.aes = FALSE, vjust = 0, size = 6
+    ) +
+   
+    # p 值
+    geom_text(
+      data = pval_sub,
+      aes(x = 1.5, y = 3.3 , label = p_label),
+      inherit.aes = FALSE, hjust = 0, vjust = 1,
+      size = 6, fontface = "italic"
+    ) +
+   
+    facet_wrap(~ carbon, scales = "free_y") + # 强制保留facet_wrap，即使只有一个碳源
+    scale_y_continuous(
+    limits = c(0, 3.5),
+    breaks = seq(0, 3.5, by = 1),
+    expand = expansion(mult = c(0.1, 0.1))) +
+    theme_bw() +
+      theme(
+      strip.text = element_text(face = "bold", size = 10),
+      axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
+      axis.text.y = element_text(angle = 45, hjust = 1, size = 12),
+      aspect.ratio = 1.2,
+      legend.position = "none" # 去掉每个图的图例
+    )+
+    labs(
+      x = "",
+      y = "Biofilm"
+    )
+ 
+  # 打印每个单独的图
+  print(p)
+  
+  #graph2ppt(x =p, file = "growth-biofilm.pptx" , append = TRUE)
+}
+```
+
+
+## 筛选具有代表性的样品用于后续分析
+
+将群落的生长和生物膜情况进行整合，以此表征群落。
+
+```{r}
+# 以第14天实验数据
+flowcyto_growth_normal_day16 <- all_data %>% 
+  filter(time == 16, class == "flowcyto", measure == "growth", carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid")) %>%
+  dplyr::select(well_id, carbon, cell_num, value) %>% 
+  rename(growth = value)
+
+flowcyto_biofilm_normal_day14 <- all_data %>% 
+  filter(time == 14, class == "flowcyto", measure == "biofilm", carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid")) %>% 
+  dplyr::select(well_id, carbon, cell_num, value) %>% 
+  rename(biofilm = value)
+
+flowcyto_normal_day14 <- left_join(flowcyto_growth_normal_day16, flowcyto_biofilm_normal_day14, by = c("well_id", "carbon", "cell_num"))
+```
+
+
+### 根据生物膜和生长情况的中位数对群落进行分类
+
+由于整体数据不属于正态分布，且有极端值的出现，用中位数来作为阈值划分群落的类别更加合理。
+我们将群路的类别按生长情况和生物膜的生物量分成了四类：
+1.生长情况差，生物膜生物量高-归类为LGHB
+2.生长情况差，生物膜生物量低-归类为LGLB
+3.生长情况好，生物膜生物量高-归类为HGHB
+4.生长情况好，生物膜生物量低-归类为HGLB
+
+
+### 为剔除未生长的群落，排除了growth值不超过背景值1.25倍的样品
+
+为排除无实际生长的群落干扰，在数据预处理阶段设定筛选标准：将growth值未超过背景值1.25倍的样品视为无生长样品，并将其从后续分析中剔除。该步骤有助于确保后续结果更准确地反映具有生长活性的群落特征。
+
+```{r}
+# 筛选出growth小于0.1的样品
+flowcyto_normal_day14_xy0.1 <- flowcyto_normal_day14 %>% 
+  filter(growth < 0.1)
+
+# 剔除growth小于0.1的样品信息
+flowcyto_normal_day14_dy0.1 <- flowcyto_normal_day14 %>% 
+  filter(growth >= 0.1)
+
+# 确保 well_id 列的格式为字符型，并去除空格
+flowcyto_normal_day14_dy0.1$well_id <- trimws(as.character(flowcyto_normal_day14_dy0.1$well_id))
+
+# 指定 edge 样本的 well_id 后缀
+edge_well_ids_suffix <- c("A1", "A2", "A3", "A4", "A5", "A6","A7", "A8", "A9", "A10", "A11", "A12",
+                          "B1", "B12", "C1", "C12", "D1", "D12", "E1", "E12", "F1", "F12",
+                          "G1", "G12", "H1", "H2", "H3", "H4", "H5", "H6", "H7", "H8", "H9", "H10", "H11", "H12")
+
+# 转换 edge_well_ids_suffix 列表为字符型，并去除空格
+edge_well_ids_suffix <- trimws(as.character(edge_well_ids_suffix))
+
+# 提取最后一个下划线后的部分
+extracted_suffix <- sub(".*_", "", flowcyto_normal_day14_dy0.1$well_id)
+
+
+# 检查匹配情况
+matches <- extracted_suffix %in% edge_well_ids_suffix
+
+# 添加 location 列，并根据 well_id 后缀设置标签
+flowcyto_normal_day14_dy0.1$location <- ifelse(matches, "edge","inside")
+# 打印数据集以查看结果
+#print(flowcyto_normal_day14_dy0.1) 
+```
+
+
+### 对数据进行分类
+
+此部分计算每种碳源和不同细胞数的中位数和四分位数，四分位数用于后续阈值的划分，中位数用来进行整体的分类，并对数据整体做Box-Cox变化，计算最符合数据的变换条件，使数据更符合正态分布。
+
+
+```{r}
+flowcyto_normal_day14_dy0.1 <- flowcyto_normal_day14_dy0.1 %>%
+  filter(location %in% c("inside"), carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid"))
+
+# 计算每种碳源和细胞数的中位数和四分位数
+carbon_cell_medians <- flowcyto_normal_day14_dy0.1 %>%
+  group_by(carbon, cell_num) %>%
+  dplyr::summarize(
+    growth_median = median(growth, na.rm = TRUE),
+    biofilm_median = median(biofilm, na.rm = TRUE),
+    growth_q1 = quantile(growth, 0.25, na.rm = TRUE),
+    growth_q3 = quantile(growth, 0.75, na.rm = TRUE),
+    biofilm_q1 = quantile(biofilm, 0.25, na.rm = TRUE),
+    biofilm_q3 = quantile(biofilm, 0.75, na.rm = TRUE),
+    groups = 'drop'
+  )
+
+# 计算 growth 的最优 lambda 值
+growth_lambda <- boxcox(lm(growth ~ 1, data = flowcyto_normal_day14_dy0.1), plotit = FALSE)$x[which.max(boxcox(lm(growth ~ 1, data = flowcyto_normal_day14_dy0.1), plotit = FALSE)$y)]
+
+# 计算 biofilm 的最优 lambda 值
+biofilm_lambda <- boxcox(lm(biofilm ~ 1, data = flowcyto_normal_day14_dy0.1), plotit = FALSE)$x[which.max(boxcox(lm(biofilm ~ 1, data = flowcyto_normal_day14_dy0.1), plotit = FALSE)$y)]
+
+
+# 使用最优 lambda 值进行 Box-Cox 变换
+carbon_cell_medians <- carbon_cell_medians %>%
+  mutate(
+    transformed_growth_median = (growth_median^growth_lambda - 1) / growth_lambda,
+    transformed_biofilm_median = (biofilm_median^biofilm_lambda - 1) / biofilm_lambda,
+    transformed_growth_q1 = (growth_q1^growth_lambda - 1) / growth_lambda,
+    transformed_growth_q3 = (growth_q3^growth_lambda - 1) / growth_lambda,
+    transformed_biofilm_q1 = (biofilm_q1^biofilm_lambda - 1) / biofilm_lambda,
+    transformed_biofilm_q3 = (biofilm_q3^biofilm_lambda - 1) / biofilm_lambda
+  )
+
+# 使用不等于（<= 和 >=）来确保所有数据都能被分类
+flowcyto_normal_day14_dy0.1 <- flowcyto_normal_day14_dy0.1 %>%
+  mutate(
+    class = ifelse(growth <= carbon_cell_medians$growth_median[match(interaction(carbon, cell_num), interaction(carbon_cell_medians$carbon, carbon_cell_medians$cell_num))] & biofilm > carbon_cell_medians$biofilm_median[match(interaction(carbon, cell_num), interaction(carbon_cell_medians$carbon, carbon_cell_medians$cell_num))], "LGHB",
+      ifelse(growth <= carbon_cell_medians$growth_median[match(interaction(carbon, cell_num), interaction(carbon_cell_medians$carbon, carbon_cell_medians$cell_num))] & biofilm <= carbon_cell_medians$biofilm_median[match(interaction(carbon, cell_num), interaction(carbon_cell_medians$carbon, carbon_cell_medians$cell_num))], "LGLB",
+      ifelse(growth > carbon_cell_medians$growth_median[match(interaction(carbon, cell_num), interaction(carbon_cell_medians$carbon, carbon_cell_medians$cell_num))] & biofilm > carbon_cell_medians$biofilm_median[match(interaction(carbon, cell_num), interaction(carbon_cell_medians$carbon, carbon_cell_medians$cell_num))], "HGHB", "HGLB")))
+  )
+
+# 对growth和biofilm进行Box-Cox变换
+bc_growth <- boxcox(flowcyto_normal_day14_dy0.1$growth ~ 1, plotit = FALSE)
+lambda_growth <- bc_growth$x[which.max(bc_growth$y)]
+transformed_growth <- (flowcyto_normal_day14_dy0.1$growth^lambda_growth - 1) / lambda_growth
+
+bc_biofilm <- boxcox(flowcyto_normal_day14_dy0.1$biofilm ~ 1, plotit = FALSE)
+lambda_biofilm <- bc_biofilm$x[which.max(bc_biofilm$y)]
+transformed_biofilm <- (flowcyto_normal_day14_dy0.1$biofilm^lambda_biofilm - 1) / lambda_biofilm
+```
+
+### 对挑选的数据进行可视化
+
+阈值设定为：
+Q1（第一个四分位数）：将数据按升序排列后，25%的数据小于或等于这个值。
+Q3（第三个四分位数）：将数据按升序排列后，75%的数据小于或等于这个值。
+中位数：将数据按升序排列后，50%的数据小于或等于这个值。
+四分位距（IQR）是通过Q3减去Q1计算，用于衡量数据的离散程度。
+
+```{r}
+
+# 计算 IQR
+carbon_cell_medians <- carbon_cell_medians %>%
+  mutate(transformed_growth_iqr = transformed_growth_q3 - transformed_growth_q1,
+         transformed_biofilm_iqr = transformed_biofilm_q3 - transformed_biofilm_q1)
+# 设置每页显示的行数和列数
+nrow <- 2
+ncol <- 2
+
+total_pages <- ceiling(nrow(carbon_cell_medians) / (nrow * ncol))
+
+for (page in 1:total_pages) {
+  # 计算距离并过滤数据
+  filtered_normal_day14_iqr <- flowcyto_normal_day14_dy0.1 %>%
+    left_join(carbon_cell_medians, by = c("carbon", "cell_num")) %>%
+    mutate(
+      distance_growth = abs(transformed_growth - transformed_growth_median),
+      distance_biofilm = abs(transformed_biofilm - transformed_biofilm_median),
+      transformed_growth = (growth^growth_lambda - 1) / growth_lambda,
+      transformed_biofilm = (biofilm^biofilm_lambda - 1) / biofilm_lambda
+    ) %>%
+     filter(!(distance_growth <= 0.5 * transformed_growth_iqr / 2 |  # 过滤在 IQR 范围内的生长数据
+           distance_biofilm <= 0.5 * transformed_biofilm_iqr / 2))  # 过滤在 IQR 范围内的生物膜数据
+
+  p <- ggplot(filtered_normal_day14_iqr, aes(x = transformed_growth, y = transformed_biofilm, color = class)) +
+    geom_point(size = 1, alpha = 1/2) +
+    scale_color_manual(values = c("LGLB" = "red", "LGHB" = "blue", "HGHB" = "green", "HGLB" = "orange")) +
+    labs(title = "Splitting of the community",
+         x = "Box-Cox Growth", 
+         y = "Box-Cox Biomass of Biofilms", 
+         color = "Class") +
+    theme_minimal() +
+    theme(plot.title = element_text(hjust = 0.5)) +
+    facet_wrap_paginate(~ carbon + cell_num, scales = "free", nrow = nrow, ncol = ncol, page = page) +
+    geom_vline(data = carbon_cell_medians, aes(xintercept = transformed_growth_median), linetype = "dashed", color = "black") +
+    geom_hline(data = carbon_cell_medians, aes(yintercept = transformed_biofilm_median), linetype = "dashed", color = "black") 
+
+
+  print(p)
+}
+
+```
+
+
+## 对分类后的数据进行挑选
+
+研究采用四种碳源与四个细胞浓度的全交设计，共设置16种处理条件。每种处理中分别选取40个样品（对应4种空间位置类型，每种10个），用于后续的测序分析。根据空间位置的分布比例为6:4，即60%的样品位于孔板内部，40%位于边缘区域。统计分析结果表明，边缘区域的群落结构易受到边际效应影响，因此为降低空间干扰因素，最终选择孔板内部区域的群落样品进行测序分析。
+
+### 读取挑选数据
+
+样品的挑选采用人工筛选的方式，优先考虑各处理组之间的代表性与均衡性，以确保所选样品在分组条件下具有良好的覆盖性和比较价值。筛选过程中侧重于体现不同碳源与细胞浓度组合的典型特征，从而为后续测序分析提供有代表性的样本基础。
+
+```{r}
+sequencing_data = read_csv("./data/sequencing_data.csv")
+```
+
+
+### 可视化将筛选的数据显示出来
+
+将筛选后的样品数据通过散点图进行展示，以直观反映样品的分布特征和分组情况。
+
+```{r}
+# 假设 sequencing_data 包含 well_id, growth 和 biofilm 列
+# 将新数据集中的点添加到现有数据框中
+flowcyto_normal_day14_dy0.1 <- flowcyto_normal_day14_dy0.1 %>%
+  left_join(sequencing_data, by = "well_id", suffix = c("", "_new"))
+
+# 对新数据集中的 growth 和 biofilm 进行 Box-Cox 变换
+flowcyto_normal_day14_dy0.1 <- flowcyto_normal_day14_dy0.1 %>%
+  mutate(transformed_growth_new = (growth_new^lambda_growth - 1) / lambda_growth,
+         transformed_biofilm_new = (biofilm_new^lambda_biofilm - 1) / lambda_biofilm)
+
+nrow <- 2
+ncol <- 2
+
+total_pages <- ceiling(nrow(carbon_cell_medians) / (nrow * ncol))
+
+for (page in 1:total_pages) {
+# 生成多页图表并添加新数据集的点
+p <- ggplot() +
+  geom_point(data = filtered_normal_day14_iqr, aes(x = transformed_growth, y = transformed_biofilm), 
+             color = "grey", size = 1, alpha = 1/2) +
+  geom_point(data = flowcyto_normal_day14_dy0.1, aes(x = transformed_growth_new, y = transformed_biofilm_new, color = class), 
+             size = 2, shape = 16) +
+  scale_color_manual(values = c("LGLB" = "red", "LGHB" = "blue", "HGHB" = "green", "HGLB" = "orange")) +
+  labs(title = "Splitting of the community",
+       x = "Box-Cox Growth", 
+       y = "Box-Cox Biomass of Biofilms", 
+       color = "Class") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  facet_wrap_paginate(~ carbon + cell_num, scales = "free", nrow = nrow, ncol = ncol, page = page) +
+  geom_vline(data = carbon_cell_medians, aes(xintercept = transformed_growth_median), linetype = "dashed", color = "black") +
+  geom_hline(data = carbon_cell_medians, aes(yintercept = transformed_biofilm_median), linetype = "dashed", color = "black")
+
+print(p)
+}
+
+```
+
+### 代表样品合并图像 
+
+```{R,fig.width=9, fig.height=8}
+
+# 1. 获取所有不同的 carbon 类型
+unique_carbon <- unique(filtered_normal_day14_iqr$carbon)
+
+# 2. 为每个 carbon 生成单独的 ggplot 对象
+plot_list <- list()
+for (carbon_type in unique_carbon) {
+  df_gray    <- filtered_normal_day14_iqr %>% filter(carbon == carbon_type)
+  df_new     <- flowcyto_normal_day14_dy0.1    %>% filter(carbon == carbon_type)
+  df_medians <- carbon_cell_medians             %>% filter(carbon == carbon_type)
+  
+  p <- ggplot() +
+    geom_point(
+      data = df_gray,
+      aes(x = transformed_growth, y = transformed_biofilm),
+      color = "grey", size = 1, alpha = 0.5
+    ) +
+    geom_point(
+      data = df_new,
+      aes(x = transformed_growth_new, y = transformed_biofilm_new, color = class),
+      size = 2, shape = 16
+    ) +
+    geom_vline(
+      data = df_medians,
+      aes(xintercept = transformed_growth_median),
+      linetype = "dashed", color = "black"
+    ) +
+    geom_hline(
+      data = df_medians,
+      aes(yintercept = transformed_biofilm_median),
+      linetype = "dashed", color = "black"
+    ) +
+    scale_color_manual(
+      values = c("LGLB" = "red", "LGHB" = "blue", "HGHB" = "green", "HGLB" = "orange")
+    ) +
+    labs(
+      title = carbon_type,
+      x     = "",
+      y     = "Biofilm",
+      color = "class"
+    ) +
+    theme_bw() +
+    theme(
+      plot.title     = element_text(hjust = 0.5),
+      axis.text.x    = element_text(angle = 0, hjust = 0.5)
+    ) +
+    facet_wrap(~ cell_num, scales = "free")
+  
+  plot_list[[as.character(carbon_type)]] <- p
+}
+
+# 3. 按每行 2 个分组拼接，并收集图例
+ncol_per_row <- 2
+n_plots      <- length(plot_list)
+n_rows       <- ceiling(n_plots / ncol_per_row)
+row_list     <- vector("list", n_rows)
+
+for (i in seq_len(n_rows)) {
+  idx      <- ((i - 1) * ncol_per_row + 1):(i * ncol_per_row)
+  idx      <- idx[idx <= n_plots]
+  row_plot <- wrap_plots(plot_list[idx], ncol = ncol_per_row) +
+    plot_layout(guides = "collect") &
+    theme(
+      legend.position  = "right",
+      legend.direction = "vertical",
+      legend.box       = "vertical"
+    )
+  row_list[[i]] <- row_plot
+}
+
+# 4. 最终上下拼接，并只在最上面那行左上角加 "(a)"
+#    通过 tag_levels 手动指定标签序列
+manual_tags <- list(c("", rep("", length(row_list) - 1)))
+
+final_plot <- wrap_plots(row_list, ncol = 1) +
+  plot_annotation(
+    tag_levels = manual_tags,
+    tag_prefix = "",   # 不加前缀
+    tag_suffix = "",   # 不加后缀
+    theme = theme(
+      plot.tag.position = c(0, 1),         # 左上角
+      plot.tag           = element_text(size = 10, face = "bold", hjust = 45, vjust = 1)
+    )
+  )
+
+# 5. 显示
+print(final_plot)
+
+#graph2pdf(final_plot, file = "selectdata.pdf")
+```
+
+
+
+
+
+
+
+ 
+
+
+

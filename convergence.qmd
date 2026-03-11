@@ -1,0 +1,64 @@
+# 收敛过程
+
+
+```{r}
+library(phyloseq)
+library(tidyverse)
+theme_set(theme_bw())
+physeq = readRDS("./data/dada2/microplate/filtered/physeq.rds")
+sample_data(physeq) = sample_data(physeq) |> 
+  data.frame() |> 
+  mutate(cell_num = factor(cell_num),
+         carbon = factor(carbon))
+top10_genus_colors = readRDS("./data/dada2/microplate/top10_genus_colors.rds")
+```
+
+
+## 主导物种间的负相关共变主导群落组装
+
+在多个碳源条件下，群落结构均呈现出由两类主导菌属 *Klebsiella* 与 *Pseudomonas* —驱动的显著分化格局。随着初始细胞数的增加，*Klebsiella* 的相对丰度稳步上升，而 *Pseudomonas* 显著下降，表现出典型的“主导种交替”或“此消彼长”的动态关系。这种趋势在糖类种碳源条件下表现得尤为明显，表明其具有跨环境一致性。
+
+该现象提示两者之间可能存在激烈的资源竞争或生态位排斥，即它们在利用特定碳源或占据生态位方面存在高度重叠。此外，低细胞数条件下 *Pseudomonas* 的持续优势地位可能反映了其在资源匮乏或低密度环境中的适应优势，而随着群落复杂度增加（高细胞数），*Klebsiella* 可能凭借更强的群体感应能力或共生优势获得主导地位。
+
+
+```{r}
+# -------------------- 1. 聚合到 Genus 级别并计算相对丰度 --------------------
+ps_genus = tax_glom(physeq, "Genus")
+ps_relabund = transform_sample_counts(ps_genus, function(x) x / sum(x, na.rm = TRUE))
+df = psmelt(ps_relabund) |> 
+  as_tibble() |> 
+  mutate(Genus = fct_relevel(fct_other(Genus, keep = names(top10_genus_colors)[1:7]), names(top10_genus_colors)))
+
+# 计算均值和标准误
+df_mod = df |> 
+  #filter(Genus != "Other") |> 
+  group_by(carbon, cell_num, Genus) |> 
+  summarise(
+    meanAbundance = mean(Abundance),
+    se = sd(Abundance, na.rm = TRUE) / sqrt(n()),
+    ymin = meanAbundance - se,
+    ymax = meanAbundance + se,
+    .groups = "drop"
+  )
+```
+
+```{r}
+p = df_mod |> 
+  ggplot(aes(cell_num, meanAbundance, group = Genus, color = Genus)) +
+  geom_point(size = 2) +
+  geom_line() +
+  facet_wrap(~carbon, nrow = 1) +
+  geom_errorbar(aes(ymin = ymin, ymax = ymax), width = 0.2) +
+  scale_color_manual(values = top10_genus_colors) +
+  scale_y_continuous(labels = scales::label_percent()) +
+  labs(x = NULL, y = "Relative Abundance") +
+  guides(color = guide_legend(nrow = 3, byrow = TRUE, title = NULL)) +
+  theme(legend.position = "bottom",
+        aspect.ratio = 1.2,
+        legend.key.size = unit(0.4, "cm"),
+        legend.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "pt")
+  )
+p
+
+graph2ppt(p, file = "convergence.pptx", append = FALSE)
+```

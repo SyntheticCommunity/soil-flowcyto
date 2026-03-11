@@ -1,0 +1,112 @@
+
+
+# GSEA 分析
+
+
+GSEA 本质上不依赖于生物学背景，而是一种通用的非参数统计方法。其核心逻辑是检验“某个预定义的子集成员是否倾向于聚集在一个排序列表的顶部或底部”。只要数据满足“全量排序”和“类别标签”这两个条件，就可以应用这种“富集”分析的思想。
+
+在我们的数据中，将各个样品按照 Pseudomonas 属的相对丰度排序，可以检测不同分组数据是否富集与较高或者较低的群落中。
+
+```{r}
+library(phyloseq)
+library(cailab.amplicon)
+library(dplyr)
+library(stringr)
+library(tibble)
+
+ps = readRDS(xfun::magic_path("microplate/filtered/physeq.rds"))
+
+sample_data(ps) = sample_data(ps) |> 
+    as("data.frame") |> 
+    mutate(growth = if_else(str_detect(class, "^HG"), "HG", "LG"),
+           biofilm = if_else(str_detect(class, "HB$"), "HB", "LB"))
+```
+
+按照假单胞菌排序，对所有分组进行 GSEA 分析，可得 `cell_num = 10` 的样品显著富集于假单胞菌高丰度的群落中（[@fig-pseudomonas-gsea-plot]）。
+
+```{r}
+gseaRes = run_microbiome_gsea(
+    ps, 
+    taxon_target = "Pseudomonas", 
+    sample_feat = c("carbon","cell_num","class"), 
+    taxon_rank = "Genus")
+
+# 查看计算结果
+gseaRes
+```
+
+```{r}
+#gseaRes_P <- readRDS("./data/slr_gsea/gseaRes_P.rds")
+```
+
+
+```{r}
+gseaRes_P |> 
+  filter(str_detect(pathway, "cell_num")) |>
+  mutate(pathway = factor(pathway, levels = paste("cell_num", c(10,50,100,250),sep="_"))) |>
+  gsea_plot()
+```
+
+```{r}
+gseaRes_P |> 
+  filter(str_detect(pathway, "carbon")) |>
+  gsea_plot()
+```
+
+```{r}
+gseaRes_P |> 
+  filter(str_detect(pathway, "class")) |>
+  gsea_plot()
+```
+
+
+```{r}
+#| label: fig-pseudomonas-gsea-plot
+#| fig-cap: 样品按假单胞菌相对丰度排序并进行 GSEA 分析
+gsea_plot_all(gseaRes, ncol = 2)
+```
+
+
+## 克雷伯氏菌
+
+按照克雷伯氏菌排序，对所有分组进行 GSEA 分析，可得 `cell_num = 10` 的样品显著富集于克雷伯氏菌低丰度的群落中（[@fig-klebsiella-gsea-plot]）。
+
+
+```{r}
+
+gseaRes = run_microbiome_gsea(
+    ps, 
+    taxon_target = "Klebsiella", 
+    sample_feat = c("carbon","cell_num","growth","biofilm"), 
+    taxon_rank = "Genus")
+
+# 查看计算结果
+gseaRes
+
+```
+
+```{r}
+#gseaRes_K <- readRDS("./data/slr_gsea/gseaRes_K.rds")
+```
+
+```{r}
+gseaRes_K |> 
+  filter(str_detect(pathway, "cell_num")) |>
+  mutate(pathway = factor(pathway, levels = paste("cell_num", c(10,50,100,250),sep="_"))) |>
+  gsea_plot()
+```
+
+```{r}
+gseaRes_K |> 
+  filter(str_detect(pathway, "carbon")) |>
+  gsea_plot()
+```
+
+```{r}
+gseaRes_K |> 
+  filter(str_detect(pathway, "class")) |>
+  gsea_plot()
+```
+
+
+

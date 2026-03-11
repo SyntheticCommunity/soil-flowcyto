@@ -1,0 +1,141 @@
+
+# FEAST溯源
+
+此部分代码对补充的土壤样品数据进行溯源，以次来解释分选样品与土壤之间的关系。
+
+
+## 加载需要的包
+
+```{r}
+library(phyloseq)
+library(Biostrings)
+library(ape)
+library(FEAST)
+```
+
+
+## 读取数据
+
+补充数据，过滤标准绝对丰度50，频率不小于2。
+
+```{r}
+physeq_soil <- readRDS(xfun::magic_path("soil/filtered/physeq.rds"))
+```
+
+
+分选数据，这里直接读取过滤好的分选数据集。
+
+```{r}
+physeq_plate <- readRDS(xfun::magic_path("microplate/filtered/physeq.rds"))
+```
+
+
+## 选择不同处理和来源的群落进行溯源追踪
+
+这里我们对分选群落，土壤原始测序群落，土壤细胞群落之间溯源追踪。
+
+## 汇（Sink）
+
+目标群落，你想要知道它里边的微生物来自哪些“来源”。
+
+#### 以土壤数据作为sink
+
+```{r}
+# 1. 构建 Sink：所有 fresh & soil 样本聚合
+sink_ps <- subset_samples(
+  physeq_soil,
+  storage == "fresh" & type == "soil"
+)
+
+sink_mat <- as(otu_table(sink_ps), "matrix")
+
+if (taxa_are_rows(sink_ps)) sink_mat <- t(sink_mat)
+
+agg_sink <- colSums(sink_mat)
+```
+
+### 以分选数据作为sink
+
+```{r}
+# 1. 构建 Sink：physeq 中所有样品聚合
+sink_ps <- physeq_plate
+sink_mat <- as(otu_table(sink_ps), "matrix")
+if (taxa_are_rows(sink_ps)) sink_mat <- t(sink_mat)
+agg_sink <- colSums(sink_mat)
+```
+
+
+## 来源（Source）
+
+一组潜在的供给群落，用来解释另一个群落中物种的组成。
+
+### 以分选数据作为Source
+
+```{r}
+source_ps <- physeq_plate
+source_mat <- as(otu_table(source_ps), "matrix")
+if (taxa_are_rows(source_ps)) source_mat <- t(source_mat)
+agg_source <- colSums(source_mat)
+```
+
+### 以土壤数据作为Source
+
+```{r}
+# 2. 构建 Source：所有 fresh & cell 样本聚合
+source_ps <- subset_samples(
+  physeq_soil,
+  storage == "fresh" & type == "soil"
+)
+src_mat <- as(otu_table(source_ps), "matrix")
+if (taxa_are_rows(source_ps)) src_mat <- t(src_mat)
+agg_source <- colSums(src_mat)
+```
+
+
+## FEAST分析
+
+对构建好的FEAST数据集进行溯源分析，选择去噪后的结果作为最终的解释比例，运行后会直接输出结果。
+
+```{r}
+# 3. 对 ASV 做并集补齐
+all_asvs <- union(names(agg_sink), names(agg_source))
+
+agg_sink_full   <- setNames(rep(0, length(all_asvs)), all_asvs)
+agg_sink_full[names(agg_sink)] <- agg_sink
+
+agg_source_full   <- setNames(rep(0, length(all_asvs)), all_asvs)
+agg_source_full[names(agg_source)] <- agg_source
+
+# 4. 拼成 FEAST 要的矩阵：第1行是 Sink，第2行是 Source
+C_mat <- rbind(
+  agg_sink_full,
+  agg_source_full
+)
+rownames(C_mat) <- c("fresh_soil_agg", "fresh_cell_agg")
+
+# 5. 构建 metadata（Sink id=1，Source id=NA）
+md <- data.frame(
+  Env        = rownames(C_mat),
+  SourceSink = c("Sink", "Source"),
+  id         = c(1, NA),
+  row.names  = rownames(C_mat),
+  stringsAsFactors = FALSE
+)
+
+# 6. 跑 FEAST（用 C++ 接口，默认输出去噪后的 pred_em_all）
+res <- FEAST::FEAST(
+  C                      = C_mat,
+  metadata               = md,
+  different_sources_flag = 0,
+  dir_path               = getwd(),
+  outfile                = "soil_from_cell"
+)
+
+# 7. 查看去噪后的最终混合比例
+clean <- res$data_prop$pred_em_all
+print(clean)
+```
+
+
+
+
