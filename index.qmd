@@ -1,3 +1,5 @@
-# 前言
+# Introduction
 
-本书记录了土壤微生物群落的流式细胞分析、多样性分析及功能预测等相关分析流程与结果。
+This book provides the supplementary materials to enable reproducible study for the following study.
+
+Zhao-Shuo Zhang, Chun-Hui Gao, Peng Cai, et. al., in preparation.
