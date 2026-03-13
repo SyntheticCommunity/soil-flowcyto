@@ -1,28 +1,22 @@
+# Cultivation of Soil-derived Subcommunities
 
-# 流式分选生长情况及生物膜分析
+我们首先自土壤中提取了活细胞，并使用流式细胞术将这些细胞组成初始细胞数不同的子集。其次，将这些小群落在不同的养分条件下培养后，测量了其生长情况和生物膜形成能力。最后，我们从这些培养物中挑选了典型的结果进行扩增子测序。
 
-对生物膜的形成及生长动态以及细胞数量变化进行了差异分析，并选取具有代表性的样品进行后续测序分析。
+## 原始数据
 
-## 2024年07月17日数据
+实验中，测量了4种碳源1-14天只测量了常规碳源的生长情况，并测定了第7天和第14天生物膜的生物量。
 
-此次分析使用的数据为流式分选的生长情况以及生物膜生物量（2024年7月17日数据）。实验中，测量了8种碳源1-7天的生长情况，其中4种为常规碳源，4种为植物类碳源。在7-14天只测量了常规碳源的生长情况，并测定了第7天和第14天生物膜的生物量。
- 
 ### 加载需要的包
 
 ```{r}
 library(tidyverse)
 library(ggpubr)
-library(dplyr)
-library(tidyr)
-library(purrr)
 library(dunn.test)
 library(multcompView)
 library(MASS)
 library(ggforce)
-library(ggplot2)
 library(patchwork)
 library(cowplot)
-library(export)
 ```
  
  
@@ -30,11 +24,11 @@ library(export)
 
 读取预处理后保存的数据。根据需要，对数据进行操作。这个数据一共 8 列，分别是：
 
-- `class`：获取土壤合成菌群的途径。分别是微液滴（`droplet`）和流式细胞分选（`flowcyto`）。
+- `method`：这里是流式细胞术（`flowcyto`）。
 - `measure`：测量的指标。分别是生长数据（OD600，`growth`）和生物膜生物量（`biofilm`）。
 - `cell_num`：初始细胞的数目。分别是 10/20/50/250。
-- `carbon`：碳源的类型。分别是海藻糖 (`trehalose`)、甘露醇 (`mannitol`)、纤维二糖 (`cellobiose`)、谷氨酸 (`glutamic acid`)、阿魏酸 (`ferulic acid`)、高丝氨酸 (`homoserine`)、柠檬酸 (`citric acid`)、水杨酸 (`salicylic acid`)。前四种是常规碳源，后四种是植物来源碳源。
-- `time`：培养时间。一共 14 天。生长实验进行了 2 个批次，在第 7 天转接到新的新鲜培养基中继续培养 7 天。每个批次结束时，使用结晶紫染色测量菌群的生物膜生物量（因此生物膜生物量仅有第 7 天和第 14 天的数据）。
+- `carbon`：碳源的类型。分别是海藻糖 (`trehalose`)、甘露醇 (`mannitol`)、纤维二糖 (`cellobiose`)、谷氨酸 (`glutamic acid`)。
+- `time`：培养时间。一共 14 天。培养中间进行了 1 次转接，即在第 7 天转接到新的新鲜培养基中继续培养 7 天。每个批次结束时，使用结晶紫染色测量菌群的生物膜生物量（因此生物膜生物量仅有第 7 天和第 14 天的数据）。
 - `plate`：平板编号。编号以碳源和测试天数命名，如 `h01` 指的是海藻糖第 1 天的数据。
 - `well_position`：96 孔板中的孔位。取值范围从 `A01` 到 `H12`。
 - `value`：测量的数值。如果是生长数据则为 OD600，如果是生物膜数据则为 OD595（结晶紫染色后测量）。
@@ -45,26 +39,23 @@ all_data = read_csv("data/20240717_all_data.csv")
 sample_n(all_data, 10)
 ```
 
-这里，为了能够将生长数据和生物膜数据一一对应，我们首先基于 `class`、`cell_num` 等创建了一个新的列 `well_id`。这是每个孔对应的唯一编号。
+这里，为了能够将生长数据和生物膜数据一一对应，我们首先基于 `method`、`cell_num` 等创建了一个新的列 `well_id`。这是每个孔对应的唯一编号。
 
 ```{r}
 # 新建 plate_id/well_id，供对照分析生物膜和生长数据时使用
 all_data = all_data |> 
- tidyr::unite(well_id, class, cell_num, plate, well_position, remove = FALSE)
+  tidyr::unite(well_id, method, cell_num, plate, well_position, remove = FALSE)
 ```
 
 对碳源的显示顺序、绘图使用的主题进行统一设置。
 
 ```{r}
-# 碳源顺序
-carbon_lbl = c("trehalose","mannitol","cellobiose","glutamic acid","ferulic acid","homoserine","citric acid","salicylic acid")
-# 统一调整 cell_num 的显示顺序
+# 转化为因子
 all_data = all_data |> 
-  mutate(cell_num = factor(cell_num, levels = c("10","50","100","250")),
-         carbon = factor(carbon, levels = carbon_lbl))
+  mutate(cell_num = factor(cell_num),
+         carbon = factor(carbon))
 
 # 统一设置 ggplot2 默认主题
-# theme_set(theme_minimal())
 theme_set(theme_bw())
 ```
 
@@ -90,8 +81,52 @@ biofilm_data |> filter(is.na(value))
 ```{r}
 # 假设 growth_data 已加载
 flowcyto_growth_data <- growth_data %>%
-  filter(time == 16, class == "flowcyto", carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid"))
+  filter(time == 16)
 
+library(agricolae)
+
+plot_boxplot_with_group_letters = function(dat) {
+  dat <- dat %>%
+    group_by(carbon, cell_num) %>%
+    dplyr::filter(! value %in% boxplot.stats(value)$out) %>%
+    ungroup()
+  max_value = dat |> group_by(cell_num) |> summarise(upper_whisker = boxplot.stats(value)$stats[5], .groups = "drop")
+  group_letters = with(dat, kruskal(value, cell_num, p.adj="bonferroni", group=TRUE))$groups |> 
+    data.frame() |>
+    rownames_to_column("cell_num") |> 
+    dplyr::select(cell_num, groups) |> 
+    left_join(max_value, by = "cell_num")
+  ggplot(dat, aes(x = cell_num, y = value)) +
+    geom_boxplot(outlier.shape = NA) +
+    stat_compare_means(method = "kruskal.test", label.x.npc = 0.2) +
+    geom_text(data = group_letters, 
+              aes(x = cell_num, y = upper_whisker + 0.1 * upper_whisker, label = groups), 
+              inherit.aes = FALSE) +
+    scale_y_continuous(expand = expansion(mult = c(0.1, 0.1))) +
+    theme(plot.title = element_text(hjust = 0.5)) 
+}
+
+plots_growth = lapply(levels(flowcyto_growth_data$carbon), function(carb) {
+  dat = flowcyto_growth_data %>% filter(carbon == carb)
+  plot_boxplot_with_group_letters(dat) +
+    labs(x = "", y = "Growth (OD600)", title = carb)
+})
+
+
+flowcyto_biofilm_data <- biofilm_data %>%
+  filter(time == 14)
+plots_biofilm = lapply(levels(flowcyto_biofilm_data$carbon), function(carb) {
+  dat = flowcyto_biofilm_data %>% filter(carbon == carb)
+  plot_boxplot_with_group_letters(dat) +
+    labs(x = "", y = "Biofilm (OD595)", title = carb)
+})
+
+
+cowplot::plot_grid(plotlist = c(plots_growth, plots_biofilm), ncol = 4, labels = "AUTO")
+```
+
+
+```{r}
 # 1. 因子化
 flowcyto_biofilm_data <- flowcyto_growth_data %>%
   mutate(cell_num = as.factor(cell_num))
@@ -221,7 +256,7 @@ for (carb in unique_carbons) {
 ```{r}
 # 假设 biofilm_data 已加载
 flowcyto_biofilm_data <- biofilm_data %>%
-  filter(time == 14, class == "flowcyto", carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid"))
+  filter(time == 14, method == "flowcyto", carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid"))
 
 # 1. 因子化
 flowcyto_biofilm_data <- flowcyto_biofilm_data %>%
@@ -352,12 +387,12 @@ for (carb in unique_carbons) {
 ```{r}
 # 以第14天实验数据
 flowcyto_growth_normal_day16 <- all_data %>% 
-  filter(time == 16, class == "flowcyto", measure == "growth", carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid")) %>%
+  filter(time == 16, method == "flowcyto", measure == "growth", carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid")) %>%
   dplyr::select(well_id, carbon, cell_num, value) %>% 
   rename(growth = value)
 
 flowcyto_biofilm_normal_day14 <- all_data %>% 
-  filter(time == 14, class == "flowcyto", measure == "biofilm", carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid")) %>% 
+  filter(time == 14, method == "flowcyto", measure == "biofilm", carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid")) %>% 
   dplyr::select(well_id, carbon, cell_num, value) %>% 
   rename(biofilm = value)
 
