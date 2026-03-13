@@ -2,32 +2,21 @@ project:
   type: book
 
 book:
-  title: "土壤流式细胞分析"
-  author: ""
+  title: "Supplementary Materials"
   date: now
   chapters:
     - index.qmd
-    - part: "流式细胞分析"
-      chapters:
-        - flowcyto-growth-and-biofilm-formation.qmd
-    - part: "多样性分析"
-      chapters:
-        - alpha-diversity.qmd
-        - beta-diversity.qmd
-        - shannon-index.qmd
-    - part: "群落差异"
-      chapters:
-        - contrast.qmd
-        - convergence.qmd
-        - FEAST.qmd
-    - part: "系统发育"
-      chapters:
-        - plot-tree.qmd
-        - slr-analysis.qmd
-    - part: "功能预测"
-      chapters:
-        - picrust2.qmd
-        - gsea-zzs.qmd
+    - flowcyto-growth-and-biofilm-formation.qmd
+    - FEAST.qmd
+    - plot-tree.qmd
+    - alpha-diversity.qmd
+    - shannon-index.qmd
+    - gsea-zzs.qmd
+    - beta-diversity.qmd
+    - convergence.qmd
+    - contrast.qmd
+    - slr-analysis.qmd
+    - picrust2.qmd    
 
 
 format:
