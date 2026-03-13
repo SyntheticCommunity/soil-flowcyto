@@ -28,8 +28,8 @@ library(ranacapa)
 library(ggplot2)
 theme_set(theme_bw())
 
-ggrare(physeq, step = 1000, color = "type", plot = FALSE) +
-    facet_wrap(~storage)
+ggrare(physeq, step = 1000, color = "sampleID", plot = FALSE) +
+    facet_wrap(~carbon)
 ```
 
 

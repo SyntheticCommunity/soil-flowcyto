@@ -26,10 +26,9 @@ library(dplyr)
 
 ```{r}
 
-physeq <- readRDS("./data/dada2/physeq.rds") 
+physeq <- readRDS("./data/dada2/microplate/physeq.rds") 
 
-physeq_filtered <- readRDS("./data/dada2_sup/physeq_filtered.rds") 
-
+physeq_filtered <- readRDS("./data/dada2/soil/filtered/physeq.rds") 
 ```
 
 

@@ -4,7 +4,7 @@ project:
 book:
   title: "土壤流式细胞分析"
   author: ""
-  date: today
+  date: now
   chapters:
     - index.qmd
     - part: "流式细胞分析"
@@ -20,14 +20,15 @@ book:
         - contrast.qmd
         - convergence.qmd
         - FEAST.qmd
-    - part: "功能预测"
-      chapters:
-        - picrust2.qmd
-        - gsea-zzs.qmd
     - part: "系统发育"
       chapters:
         - plot-tree.qmd
         - slr-analysis.qmd
+    - part: "功能预测"
+      chapters:
+        - picrust2.qmd
+        - gsea-zzs.qmd
+
 
 format:
   html:

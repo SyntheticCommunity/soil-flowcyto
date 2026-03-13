@@ -59,6 +59,4 @@ p = df_mod |>
         legend.margin = margin(t = 0, r = 0, b = 0, l = 0, unit = "pt")
   )
 p
-
-graph2ppt(p, file = "convergence.pptx", append = FALSE)
 ```

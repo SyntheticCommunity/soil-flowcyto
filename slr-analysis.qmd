@@ -67,7 +67,7 @@ rename_asv <- function(physeq, prefix="ASV"){
   physeq}
 
 # 用法
-physeq<- rename_asv(physeq, prefix="ASV")
+physeq <- rename_asv(physeq, prefix="ASV")
 ```
 
 
@@ -89,15 +89,6 @@ se.slr.amgut <- spiec.easi(ps_final, method='slr', r=10, lambda.min.ratio=1e-4,
                            nlambda=50, pulsar.params=list(rep.num=50, ncores=1))
 ```
 
-
-```{r}
-saveRDS(se.slr.amgut, file = "./data/slr_gsea/se.slr.amgut.rds")
-```
-
-
-```{r}
-se.slr.amgut <- readRDS("./data/slr_gsea/se.slr.amgut.rds")
-```
 
 ### 提取潜在变量
 
