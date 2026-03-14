@@ -59,30 +59,19 @@ all_data = all_data |>
 theme_set(theme_bw())
 ```
 
-将数据分为生长数据和生物膜数据。与此同时，分别检查生长和生物膜数据的完整性。这里如果有空缺值则会显示出来。
+## 统计分析
+
+将数据分为生长数据和生物膜数据（仅保留最终时间点的数据）。
 
 ```{r}
-growth_data = all_data |> filter(measure == "growth")
-growth_data |> filter(is.na(value))
+growth_data = all_data |> filter(measure == "growth", time == 16)
 
-biofilm_data= all_data |> filter(measure == "biofilm")
-biofilm_data |> filter(is.na(value))
+biofilm_data= all_data |> filter(measure == "biofilm", time == 14)
 ```
 
-
-## 细胞数量增加促进生物膜形成但不增强生长表现
-
-随着细胞数的增加，生物膜形成显著增加，然而细胞的生长情况未表现出相应的上升趋势
-
-### 细胞数量的增加未导致群体生长水平的提升
-
-尽管观察到细胞数量持续增加，但群体的整体生长水平并未呈现相应的上升的显著差异。这一现象表明，细胞密度的增加并不一定直接促进群落的生长活性。
+分析初始细胞数量与生长和生物膜表型之间的关系。
 
 ```{r}
-# 假设 growth_data 已加载
-flowcyto_growth_data <- growth_data %>%
-  filter(time == 16)
-
 library(agricolae)
 
 plot_boxplot_with_group_letters = function(dat) {
@@ -96,287 +85,40 @@ plot_boxplot_with_group_letters = function(dat) {
     rownames_to_column("cell_num") |> 
     dplyr::select(cell_num, groups) |> 
     left_join(max_value, by = "cell_num")
-  ggplot(dat, aes(x = cell_num, y = value)) +
+  p.value = kruskal.test(value ~ cell_num, dat)$p.value
+  p = ggplot(dat, aes(x = cell_num, y = value)) +
     geom_boxplot(outlier.shape = NA) +
-    stat_compare_means(method = "kruskal.test", label.x.npc = 0.2) +
-    geom_text(data = group_letters, 
-              aes(x = cell_num, y = upper_whisker + 0.1 * upper_whisker, label = groups), 
-              inherit.aes = FALSE) +
+    annotate("text", x = -Inf, y = Inf, label = paste0("p = ", format(p.value, digits = 2, scientific = TRUE)), vjust = 1.2, hjust = -0.2, fontface = "italic") +
     scale_y_continuous(expand = expansion(mult = c(0.1, 0.1))) +
     theme(plot.title = element_text(hjust = 0.5)) 
-}
 
-plots_growth = lapply(levels(flowcyto_growth_data$carbon), function(carb) {
-  dat = flowcyto_growth_data %>% filter(carbon == carb)
-  plot_boxplot_with_group_letters(dat) +
-    labs(x = "", y = "Growth (OD600)", title = carb)
-})
+  if (p.value < 0.05){
+    p = p + geom_text(data = group_letters, 
+              aes(x = cell_num, y = upper_whisker + 0.1 * upper_whisker, label = groups)) 
+  }
 
-
-flowcyto_biofilm_data <- biofilm_data %>%
-  filter(time == 14)
-plots_biofilm = lapply(levels(flowcyto_biofilm_data$carbon), function(carb) {
-  dat = flowcyto_biofilm_data %>% filter(carbon == carb)
-  plot_boxplot_with_group_letters(dat) +
-    labs(x = "", y = "Biofilm (OD595)", title = carb)
-})
-
-
-cowplot::plot_grid(plotlist = c(plots_growth, plots_biofilm), ncol = 4, labels = "AUTO")
-```
-
-
-```{r}
-# 1. 因子化
-flowcyto_biofilm_data <- flowcyto_growth_data %>%
-  mutate(cell_num = as.factor(cell_num))
-
-# 2. 去掉每个组的箱线异常值
-trimmed <- flowcyto_biofilm_data %>%
-  group_by(carbon, cell_num) %>%
-  filter(! value %in% boxplot.stats(value)$out) %>%
-  ungroup()
-
-biofilm_letters <- trimmed %>%
-  group_by(carbon) %>%
-  nest() %>%
-  mutate(
-    letters = map(data, ~ {
-      dat <- .x
-      kt <- kruskal.test(value ~ cell_num, data = dat)
-     
-      if (kt$p.value < 0.05) {
-        # Dunn's test
-        dres <- dunn.test(dat$value, dat$cell_num, method = "bonferroni")
-        comps <- strsplit(dres$comparisons, " - ")
-        pv <- dres$P.adjusted
-        names(pv) <- sapply(comps, paste, collapse = "-")
-        mc <- multcompLetters(pv, threshold = 0.05)$Letters
-        stats_list <- dat %>%
-          group_by(cell_num) %>%
-          summarise(
-            upper_whisker = boxplot.stats(value)$stats[5],
-            range = diff(range(value)),
-            .groups = "drop"
-          )
-        tibble(
-          cell_num = names(mc),
-          letter = unname(mc)
-        ) %>%
-        left_join(stats_list, by = "cell_num") %>%
-        mutate(y_pos = upper_whisker + 0.1 * range)
-       
-      } else {
-        # 不显著时返回 NA 占位
-        dat %>%
-          distinct(cell_num) %>%
-          mutate(letter = NA_character_, y_pos = NA_real_)
-      }
-    })
-  ) %>%
-  unnest(letters)
-
-# 4. 计算每个 carbon 面板的 Kruskal–Wallis p 值，并用科学计数法显示
-pvals_df <- trimmed %>%
-  group_by(carbon) %>%
-  summarise(
-    p.value = kruskal.test(value ~ cell_num)$p.value,
-    y = max(value, na.rm = TRUE) + 0.5,
-    .groups = "drop"
-  ) %>%
-  mutate(
-    p_label = ifelse(!is.na(p.value),
-                           paste("p =", format(p.value, digits = 2)),
-                           NA_character_)
-  )
-
-# 获取唯一的 carbon 值
-unique_carbons <- unique(trimmed$carbon)
-
-# 循环遍历每个 carbon，创建并打印单独图表
-for (carb in unique_carbons) {
-  # 子集数据
-  df_sub <- trimmed %>% filter(carbon == carb)
-  letters_sub <- biofilm_letters %>% filter(carbon == carb)
-  pval_sub <- pvals_df %>% filter(carbon == carb)
- 
-  p <- ggplot(df_sub, aes(x = cell_num, y = value)) +
-    geom_boxplot(
-      outlier.shape = NA,
-      width = 0.6, # 箱宽从0.5调大到0.7
-      fill = "white",
-      color = "black"
-    ) +
-   
-    # Dunn 字母
-    geom_text(
-      data = letters_sub,
-      aes(x = cell_num, y = y_pos, label = letter),
-      inherit.aes = FALSE, vjust = 0, size = 6
-    ) +
-   
-    # p 值
-    geom_text(
-      data = pval_sub,
-      aes(x = 1.5, y = 1.75, label = p_label),
-      inherit.aes = FALSE, hjust = 0, vjust = 1,
-      size = 6, fontface = "italic"
-    ) +
-    facet_wrap(~ carbon, scales = "free_y") + # 强制保留facet_wrap，即使只有一个碳源
-    scale_y_continuous(
-    limits = c(0, 2),
-    breaks = seq(0, 2, by = 0.5),
-    expand = expansion(mult = c(0.1, 0.1))) +
-   
-    theme_bw() +
-    theme(
-      strip.text = element_text(face = "bold", size = 10),
-      axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
-      axis.text.y = element_text(angle = 45, hjust = 1, size = 12),
-      aspect.ratio = 1.2,
-      legend.position = "none" # 去掉每个图的图例
-    )+
-    labs(
-      x = "",
-      y = "Growth"
-    )
- 
-  # 打印每个单独的图
-  print(p)
-  
-  #graph2ppt(x =p, file = "growth-biofilm.pptx" , append = TRUE)
+  return(p)
 }
 ```
 
 
-### 群落生物膜的形成量与细胞数量呈正相关
-
-随着细胞数量的增加，群落生物膜的形成量也显著上升，二者呈现正相关关系。这一趋势表明，较高的细胞密度可能有助于生物膜的累积或结构稳定性的增强，提示生物膜形成在一定程度上依赖于细胞间的协同作用或信号传导机制。（与功能预测呼应）
-
 ```{r}
-# 假设 biofilm_data 已加载
-flowcyto_biofilm_data <- biofilm_data %>%
-  filter(time == 14, method == "flowcyto", carbon %in% c("trehalose", "mannitol", "cellobiose", "glutamic acid"))
+plots_growth = lapply(levels(growth_data$carbon), function(carb) {
+  dat = growth_data %>% filter(carbon == carb)
+  plot_boxplot_with_group_letters(dat) +
+    labs(x = NULL, y = "Growth (OD600)", title = carb)
+})
 
-# 1. 因子化
-flowcyto_biofilm_data <- flowcyto_biofilm_data %>%
-  mutate(cell_num = as.factor(cell_num))
 
-# 2. 去掉每个组的箱线异常值
-trimmed <- flowcyto_biofilm_data %>%
-  group_by(carbon, cell_num) %>%
-  filter(! value %in% boxplot.stats(value)$out) %>%
-  ungroup()
 
-biofilm_letters <- trimmed %>%
-  group_by(carbon) %>%
-  nest() %>%
-  mutate(
-    letters = map(data, ~ {
-      dat <- .x
-      kt <- kruskal.test(value ~ cell_num, data = dat)
-     
-      if (kt$p.value < 0.05) {
-        # Dunn's test
-        dres <- dunn.test(dat$value, dat$cell_num, method = "bonferroni")
-        comps <- strsplit(dres$comparisons, " - ")
-        pv <- dres$P.adjusted
-        names(pv) <- sapply(comps, paste, collapse = "-")
-        mc <- multcompLetters(pv, threshold = 0.05)$Letters
-        stats_list <- dat %>%
-          group_by(cell_num) %>%
-          summarise(
-            upper_whisker = boxplot.stats(value)$stats[5],
-            range = diff(range(value)),
-            .groups = "drop"
-          )
-        tibble(
-          cell_num = names(mc),
-          letter = unname(mc)
-        ) %>%
-        left_join(stats_list, by = "cell_num") %>%
-        mutate(y_pos = upper_whisker + 0.1 * range)
-       
-      } else {
-        # 不显著时返回 NA 占位
-        dat %>%
-          distinct(cell_num) %>%
-          mutate(letter = NA_character_, y_pos = NA_real_)
-      }
-    })
-  ) %>%
-  unnest(letters)
+plots_biofilm = lapply(levels(biofilm_data$carbon), function(carb) {
+  dat = biofilm_data %>% filter(carbon == carb)
+  plot_boxplot_with_group_letters(dat) +
+    labs(x = NULL, y = "Biofilm (OD595)", title = carb)
+})
 
-# 4. 计算每个 carbon 面板的 Kruskal–Wallis p 值，并用科学计数法显示
-pvals_df <- trimmed %>%
-  group_by(carbon) %>%
-  summarise(
-    p.value = kruskal.test(value ~ cell_num)$p.value,
-    y = max(value, na.rm = TRUE) + 0.5,
-    .groups = "drop"
-  ) %>%
-  mutate(
-    p_label = ifelse(!is.na(p.value),
-                           paste("p =", format(p.value, digits = 2)),
-                           NA_character_)
-  )
 
-# 获取唯一的 carbon 值
-unique_carbons <- unique(trimmed$carbon)
-
-# 循环遍历每个 carbon，创建并打印单独图表
-for (carb in unique_carbons) {
-  # 子集数据
-  df_sub <- trimmed %>% filter(carbon == carb)
-  letters_sub <- biofilm_letters %>% filter(carbon == carb)
-  pval_sub <- pvals_df %>% filter(carbon == carb)
- 
-  p <- ggplot(df_sub, aes(x = cell_num, y = value)) +
-    geom_boxplot(
-      outlier.shape = NA,
-      width = 0.6, # 箱宽从0.5调大到0.7
-      fill = "white",
-      color = "black"
-    ) +
-   
-    # Dunn 字母
-    geom_text(
-      data = letters_sub,
-      aes(x = cell_num, y = y_pos, label = letter),
-      inherit.aes = FALSE, vjust = 0, size = 6
-    ) +
-   
-    # p 值
-    geom_text(
-      data = pval_sub,
-      aes(x = 1.5, y = 3.3 , label = p_label),
-      inherit.aes = FALSE, hjust = 0, vjust = 1,
-      size = 6, fontface = "italic"
-    ) +
-   
-    facet_wrap(~ carbon, scales = "free_y") + # 强制保留facet_wrap，即使只有一个碳源
-    scale_y_continuous(
-    limits = c(0, 3.5),
-    breaks = seq(0, 3.5, by = 1),
-    expand = expansion(mult = c(0.1, 0.1))) +
-    theme_bw() +
-      theme(
-      strip.text = element_text(face = "bold", size = 10),
-      axis.text.x = element_text(angle = 45, hjust = 1, size = 12),
-      axis.text.y = element_text(angle = 45, hjust = 1, size = 12),
-      aspect.ratio = 1.2,
-      legend.position = "none" # 去掉每个图的图例
-    )+
-    labs(
-      x = "",
-      y = "Biofilm"
-    )
- 
-  # 打印每个单独的图
-  print(p)
-  
-  #graph2ppt(x =p, file = "growth-biofilm.pptx" , append = TRUE)
-}
+cowplot::plot_grid(plotlist = c(plots_growth, plots_biofilm), ncol = 4, labels = "auto")
 ```
 
 
