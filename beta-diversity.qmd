@@ -9,6 +9,13 @@
 library(phyloseq)  
 library(ggplot2)
 library(ggpubr)
+library(ggVennDiagram)
+library(cowplot)
+library(glue)
+library(export)
+library(vegan)
+library(pairwiseAdonis)
+theme_set(theme_bw())
 ```
 
 ## 读取数据集
@@ -17,10 +24,15 @@ library(ggpubr)
 physeq <- readRDS("./data/dada2/microplate/filtered/physeq.rds") #读取
 ```
 
-
+### 配色加载
 
 ```{r}
-# 绘图准备
+my_saved_colors <- readRDS("./data/dada2/microplate/factor_colors.rds" )
+```
+
+### 绘图准备
+
+```{r}
 carbon_levels <- sample_data(physeq)[["carbon"]] |> unique() |> sort()
 cell_num_levels <- sample_data(physeq)[["cell_num"]] |> unique() |> sort()
 ```
@@ -30,9 +42,6 @@ cell_num_levels <- sample_data(physeq)[["cell_num"]] |> unique() |> sort()
 ```{r}
 #| label: fig-asv-overlapping-by-carbon
 #| fig-cap: "不同碳源条件下微生物群落的ASV重叠情况"
-
-library(ggVennDiagram)
-library(ggplot2)
 
 # 提取每个 carbon 水平下的 ASV 列表
 data_list = lapply(carbon_levels, function(this_carbon){
@@ -178,113 +187,17 @@ p
 ##  不同初始细胞数分组之间微生物群落结构存在显著差异
 
 通过计算 Bray-Curtis 距离矩阵，并结合主坐标分析 PCoA 进行实现，分析结果表明，初始细胞数对群落结构具有显著影响，不同接种量条件下的样本在坐标空间中呈现出清晰分离，说明其群落组成存在明显差异。
-
-
 在微生物组研究中，**PERMANOVA**（置信度多元方差分析）是验证 PCoA 图中观测到的分组差异是否具有统计学显著性的“金标准”。在 R 中，最常用的实现工具是 `vegan` 包中的 `adonis2` 函数。
 
-```{r}
-library(vegan)
-
-# 1. 计算距离矩阵
-dist_matrix <- phyloseq::distance(physeq, method = "bray")
-
-# 2. 提取元数据 (确保它是 data.frame 格式)
-metadata <- data.frame(sample_data(physeq))
-```
-
-
-`adonis2` 采用公式接口，类似于线性模型。
-
-```{r}
-# 检验 carbon（碳源）对群落结构的影响
-# permutations = 999 表示进行 999 次置换检验以计算 p 值
-permanova_res <- adonis2(dist_matrix ~ carbon, 
-                         data = metadata, 
-                         permutations = 999)
-
-# 查看结果
-print(permanova_res)
-```
-
-不同碳源，不同初始细胞数分组在群落结构上表现出显著差异（PERMANOVA，p<0.05），表明他们对微生物群落的构建具有显著影响。与之相比，群落的生长和生物膜等表型对群落结构的影响不显著。
-
-```{r}
-# 检验 初始细胞数 对群落结构的影响
-# permutations = 999 表示进行 999 次置换检验以计算 p 值
-permanova_res <- adonis2(dist_matrix ~ factor(cell_num), 
-                         data = metadata, 
-                         permutations = 999)
-
-# 查看结果
-print(permanova_res)
-```
-
-
-```{r}
-# 检验 class 对群落结构的影响
-# permutations = 999 表示进行 999 次置换检验以计算 p 值
-permanova_res <- adonis2(dist_matrix ~ class, 
-                         data = metadata, 
-                         permutations = 999)
-
-# 查看结果
-print(permanova_res)
-```
-
-在输出的表格中，重点关注以下三列：
-
-* ** (R-squared)**：解释度。例如 0.09 意味着分组因子（如碳源）可以解释 **9%** 的群落变异。数值越高，分组差异越显著。
-* ** (F-Model)**：统计量。 值越大，组间差异相对于组内差异越大。
-* ****：即 P 值。若 ，则说明不同分组之间的群落结构存在显著差异。
-
-
-如果你的 `carbon` 有多个水平（如 4 种碳源），`adonis2` 只能告诉你“整体上是否有差异”。
-要具体知道“A 碳源和 B 碳源是否有差异”，需要进行两两比较，目前最流行且方便的是 `pairwiseAdonis` 包：
-
-```{r}
-library(pairwiseAdonis)
-
-# 进行两两比较
-pairwise_res <- pairwise.adonis(dist_matrix, metadata$carbon)
-
-# 查看哪些组之间有显著差异
-print(pairwise_res)
-```
-
-
 PERMANOVA 的显著结果可能由两个原因引起：
-
 1. 各组的**中心位置（Centroid）**不同（这通常是我们想要的结论）。
 2. 各组的**离散程度（Dispersion/Variance）**不同。
-
-为了严谨，你应该同时运行 `betadisper`：
-
-```{r}
-# 检验各组的变异程度（离散度）是否齐性
-disp_res_carbon <- betadisper(dist_matrix, metadata$carbon)
-anova(disp_res_carbon) # 如果 p > 0.05，说明各组离散度齐性，PERMANOVA 的结果更可靠
-
-disp_res_cell_num <- betadisper(dist_matrix, metadata$cell_num)
-anova(disp_res_cell_num) # 如果 p > 0.05，说明各组离散度齐性，PERMANOVA 的结果更可靠
-```
 
 ### 结果可视化
 
 为评估不同初始细胞数对群落结构稳定性的影响，针对每一种碳源，分别提取微生物群落丰度矩阵并计算 Bray-Curtis 距离。随后使用主坐标分析（PCoA）和PERMANOVA检验各组间群落结构的显著性差异。同时，利用betadisper方法计算每个样本到其所在组中心的距离，以衡量群内结构离散度，并通过箱线图展示不同初始细胞数分组的离散度变化趋势。组间差异通过pairwisePERMANOVA进行两两比较，并采用FDR方法进行多重假设检验校正，显著性结果以字母标注形式显示。
 
-
-#### PCoA 图
-
-```{r}
-library(cowplot)
-library(glue)
-library(export)
-theme_set(theme_bw())
-
-# 自定义配色
-carbon_colors = RColorBrewer::brewer.pal(n = length(carbon_levels), name = "Set2")
-cell_num_colors = RColorBrewer::brewer.pal(n = length(cell_num_levels)+1, name = "Blues") |> tail(-1)
-```
+### 群落β多样性绘制函数
 
 ```{r}
 plot_pcoa_res = function(physeq, group_var = "cell_num", shape_var = "carbon"){
@@ -295,9 +208,10 @@ plot_pcoa_res = function(physeq, group_var = "cell_num", shape_var = "carbon"){
   # 统计检验 (PERMANOVA)
   metadata = data.frame(sample_data(physeq))
   formula_str = as.formula(paste("dist_mat ~", group_var))
+  
+  set.seed(123) 
   ad_res = adonis2(formula_str, data = metadata) 
 
-  # 提取 R2 和 p 值
   r2_val = round(ad_res$R2[1], 3)
   p_val = ad_res$`Pr(>F)`[1]
   p_label = if(p_val < 0.001) "< 0.001" else round(p_val, 3)
@@ -319,59 +233,9 @@ plot_pcoa_res = function(physeq, group_var = "cell_num", shape_var = "carbon"){
       y = glue("PCoA 2 ({pc2_exp}%)")
     )
 }
-
 ```
 
-
-```{r}
-my_saved_colors <- readRDS("./data/dada2/microplate/factor_colors.rds" )
-```
-
-```{r}
-plot_pcoa_res = function(physeq, group_var = "cell_num", shape_var = "carbon"){
-
-  # 1. 计算与统计 (保持不变)
-  pcoa_res = ordinate(physeq, method = "PCoA", distance = "bray")
-  dist_mat = phyloseq::distance(physeq, method = "bray")
-  metadata = data.frame(sample_data(physeq))
-  formula_str = as.formula(paste("dist_mat ~", group_var))
-  ad_res = adonis2(formula_str, data = metadata, na.action = na.omit) # 加上na.omit保险
-  
-  r2_val = round(ad_res$R2[1], 3)
-  p_val = ad_res$`Pr(>F)`[1]
-  p_label = if(!is.na(p_val) && p_val < 0.001) "< 0.001" else round(p_val, 3)
-
-  pc1_exp = round(pcoa_res$values$Relative_eig[1] * 100, 2)
-  pc2_exp = round(pcoa_res$values$Relative_eig[2] * 100, 2)
-  stats_label = paste0("R^2 == ", r2_val, " * ',' ~ p == ", p_label)
-  plot_data = plot_ordination(physeq, pcoa_res, justDF = TRUE)
-
-  # 2. 绘图 (只做基础映射)
-  p <- ggplot(plot_data, aes(.data[["Axis.1"]], .data[["Axis.2"]], color = factor(.data[[group_var]]))) +
-    geom_point(size = 3, mapping = if(!is.null(shape_var)) aes(shape = factor(.data[[shape_var]]))) +
-    stat_ellipse(aes(group = .data[[group_var]]), linetype = 2, size = 0.3, show.legend = FALSE, type = "t") +
-    annotate("text", x = -Inf, y = Inf, label = stats_label, parse = TRUE,
-             hjust = -0.1, vjust = 1.2, size = 3.5, fontface = "italic") +
-    labs(
-      x = glue("PCoA 1 ({pc1_exp}%)"), 
-      y = glue("PCoA 2 ({pc2_exp}%)"),
-      color = group_var, 
-      shape = shape_var
-    ) +
-    theme_bw()
-}
-```
-
-
-```{r}
-#| label: fig-pcoa-by-carbon-and-cellnum-overall
-#| fig-cap: "不同碳源和初始细胞数对微生物群落结构的综合影响"
-
-plot_pcoa_res(physeq) +
-  scale_color_manual(values = cell_num_colors) +
-  scale_shape_manual(values = c(16, 17, 15, 18)) +
-  labs(color = "cell num", shape = "carbon")
-```
+### 不同碳细胞数群落多样性
 
 ```{r}
 #| label: fig-pcoa-by-carbon-and-cellnum
@@ -404,6 +268,7 @@ p
 #graph2ppt(p, file = "beta-diversity.pptx",append = T)
 ```
 
+### 不同碳源群落表型群落多样性
 
 ```{r}
 #| label: fig-pcoa-by-carbon-and-class
@@ -435,58 +300,4 @@ p
 #graph2ppt(p, file = "beta-diversity.pptx",append = T)
 ```
 
-#### 离散度分析
 
-```{r}
-plot_disp_res = function(disp_res) {
-
-  # 1. 提取样本到中心点的距离数据
-  dis_data = data.frame(
-    Distance = disp_res$distances,
-    Group = disp_res$group
-  )
-
-  # 2. 计算 ANOVA 显著性
-  # 提取 P 值用于图表标注
-  anova_res = anova(disp_res)
-  p_val = anova_res$`Pr(>F)`[1]
-  p_label = if(p_val < 0.001) "p < 0.001" else paste0("p == ", round(p_val, 3))
-  
-  # 3. 构造统计文本标签（使用 plotmath 格式或纯文本）
-  stats_label = paste0("'PERMDISP: ' * ", p_label)
-
-  # 4. 绘图
-  ggplot(dis_data, aes(x = Group, y = Distance)) + #color = Group
-    # 绘制箱线图
-    geom_boxplot(outlier.shape = NA, alpha = 0.6, width = 0.5) +
-    # 添加抖动点以展示原始数据分布
-    geom_jitter(width = 0.15, alpha = 0.4, size = 1.5) +
-    # 标注显著性 P 值
-    annotate("text", x = -Inf, y = Inf, label = stats_label, 
-             parse = TRUE, hjust = -0.1, vjust = 1.5, 
-             size = 4, fontface = "italic", color = "black") +
-     theme(legend.position = "none",aspect.ratio = 1.2)+
-     scale_y_continuous(expand = expansion(mult = c(0.05, 0.2)))
-}
-```
-
-```{r}
-#| label: fig-dispersion-by-carbon-and-cellnum-class
-#| fig-cap: "不同碳源、初始细胞数及群落表型对微生物群落结构离散度的影响"
-p1 = plot_disp_res(disp_res_carbon) +
-  labs(x = "carbon", y = "Distance to Group Centroid") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1,size = 10))
-p2 = plot_disp_res(disp_res_cell_num) +
-  labs(x = "cell num", y = "Distance to Group Centroid") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1,size = 10))
-p3 = betadisper(dist_matrix, metadata$class) |> 
-  plot_disp_res() +
-  labs(x = "class", y = "Distance to Group Centroid") +
-  theme(axis.text.x = element_text(angle = 30, hjust = 1,size = 10))
-
-p = cowplot::plot_grid(p1, p2, p3, labels = "auto", ncol = 3, align = "hv")
-
-p
-
-#graph2ppt(p, file = "beta-diversity.ppt",append = T)
-```

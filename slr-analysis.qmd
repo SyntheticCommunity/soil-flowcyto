@@ -71,7 +71,6 @@ physeq <- rename_asv(physeq, prefix="ASV")
 ```
 
 
-
 ## 构建互作网络
 
 ### 数据集清洗
@@ -88,7 +87,6 @@ ps_final <- prune_taxa(taxa_sums(physeq) > 0, physeq)
 se.slr.amgut <- spiec.easi(ps_final, method='slr', r=10, lambda.min.ratio=1e-4,
                            nlambda=50, pulsar.params=list(rep.num=50, ncores=1))
 ```
-
 
 ### 提取潜在变量
 
@@ -218,8 +216,6 @@ known_vars_cor
 
 虽然 PC5 解释率只有5%,但它是**唯一一个与"初始细胞数"(Cell Num)强相关的维度**。这才是我们要研究的核心变量!
 
-
-
 ```{r}
 cor_mat <- do.call(rbind, known_vars_cor)
 rownames(cor_mat) <- names(known_vars_cor)
@@ -262,10 +258,8 @@ Kendall 相关性检验：由于细胞数（10, 50, 100, 250）并非严格的�
 排除干扰，锁定信号： 证明了 PC5 不是随机噪音，而是真实反映密度梯度的生物学信号。
 
 ```{r}
-# 1. 读取配色文件
 my_saved_colors <- readRDS("./data/dada2/microplate/factor_colors.rds")
 
-# 2. 数据准备
 plot_data <- data.frame(
   SampleID = sample_names(ps_final),
   Latent_Effect = pca$scores[, 5], 
@@ -277,7 +271,6 @@ plot_data <- data.frame(
 carbon_list <- unique(plot_data$Carbon)
 plot_list <- list()
 
-# 3. 循环绘图
 for (carb in carbon_list) {
   
   sub_data <- subset(plot_data, Carbon == carb)
@@ -285,30 +278,21 @@ for (carb in carbon_list) {
   p <- ggplot(sub_data, aes(x = Initial_Cell_Num, y = Latent_Effect)) +
     geom_point(aes(color = Initial_Cell_Num), size = 4, alpha = 0.8) + 
     geom_smooth(method = "lm", aes(group = 1), color = "black", linetype = "dashed", se = TRUE) + 
-    
-    # --- 【在这里加入自定义颜色】 ---
-    # 直接调用 saved_colors 里的 cell 颜色向量
     scale_color_manual(values = my_saved_colors$cell) +
-    # -----------------------------
-
     scale_x_discrete(expand = expansion(mult = c(0.1, 0.1))) + 
     theme_bw() +
     labs(
       x = NULL, 
       y = "",
-      subtitle = carb # 加上副标题区分碳源
-    ) +
+      subtitle = carb) +
     stat_cor(aes(group = 1), method = "kendall", 
              label.x.npc = "left", label.y.npc = "top", 
              vjust = 1.5, hjust = 0) +
-    theme(
-      legend.position = "none" 
-    )
+    theme(legend.position = "none" )
   
   plot_list[[carb]] <- p
 }
 
-# 4. 拼图
 cowplot::plot_grid(plotlist = plot_list, labels = "auto")
 ```
 
@@ -432,7 +416,6 @@ print(p_balanced)
 
 ### 网络的构建
 
-
 ```{r}
 #' 聚合低丰度OTU为"other"类群
 #'
@@ -473,146 +456,63 @@ ps_grouped <- group_low_abundance_taxa(ps_final, n = 15, taxrank = "Genus")
 print(ps_grouped)
 ```
 
-### 未经过滤的网络结果
 
-```{r}
-# 1. 读取颜色 (假设文件里的顺序已经是：Top1 -> Top2 -> ... -> Other)
-genus_colors <- readRDS("./data/dada2/microplate/top10_genus_colors.rds")
+### Gephi 可视化文件构建（去除非主网络的节点）
 
-# 直接提取名字，作为图例的顺序
-legend_order <- names(genus_colors) 
-tax_mat <- as(tax_table(ps_grouped), "matrix")
-tax_mat[,"Genus"] <- ifelse(tax_mat[,"Genus"] %in% legend_order, tax_mat[,"Genus"], "Other")
-tax_table(ps_grouped) <- tax_table(tax_mat)
-
-vertex_attr <- data.frame(tax_table(ps_grouped)) |> tibble::rownames_to_column("name")
-ig2.mb <- adj2igraph(getRefit(se.slr.amgut), vertex.attr = vertex_attr)
-
-# 4. 绘图
-plot_network(ig2.mb, ps_grouped, type = 'taxa', color = "Genus") +
-  scale_color_manual(values = genus_colors, breaks = legend_order) +
-  geom_point(size = 3) +
-  theme_void() +
-  theme(legend.position = "right")
-```
-
-```{r}
-# 1. 读取颜色与顺序
-genus_colors <- readRDS("./data/dada2/microplate/top10_genus_colors.rds")
-legend_order <- names(genus_colors) # 提取顺序 (Top -> ... -> Other)
-
-tax_mat <- as(tax_table(ps_grouped), "matrix")
-tax_mat[,"Genus"] <- ifelse(tax_mat[,"Genus"] %in% legend_order, tax_mat[,"Genus"], "Other")
-tax_table(ps_grouped) <- tax_table(tax_mat)
-
-
-vertex_attr <- data.frame(tax_table(ps_grouped)) |> tibble::rownames_to_column("name")
-ig2.mb <- adj2igraph(getRefit(se.slr.amgut), vertex.attr = vertex_attr)
-
-plot_network(ig2.mb, ps_grouped, type = 'taxa', color = "Genus", point_size = 4) + 
-  scale_color_manual(values = genus_colors, breaks = legend_order) + 
-  theme_void() +
-  theme(legend.position = "right")
-```
-
-
-
-### 对网络节点的过滤（去除非主网络的节点）
-
-网络绘制的节点，虽有一些节点并非孤立，但并不在主网络中，可能会影响后续的分析结果因此这些在可视化上应该剔除（若不进行后续的zipi分析则可以保留）
-
-```{r}
-library(igraph)
-
-# 1. 重新计算度 (确保使用 igraph 的函数)
-# 使用 V(ig2.mb) 确保基于当前图的对象
-V(ig2.mb)$degree <- igraph::degree(ig2.mb)
-
-# 2. 【最安全的方法】直接在原图上删除度为 0 的节点
-# 逻辑：找出度等于0的节点 -> 删掉它们
-# 这样剩下的自然就是有连线的，且原有连线绝对不会断
-ig_connected_safe <- delete_vertices(ig2.mb, V(ig2.mb)[degree < 2])
-
-# 3. 绘图验证
-plot_network(ig_connected_safe, ps_grouped, type='taxa', color="Genus", layout.method = layout.grid) +
-  scale_color_brewer(palette = "Paired") +
-  labs(title = "Safe Network Plot", subtitle = "Removed nodes with degree=0 directly")
-```
-
-```{r}
-# 1. 筛选节点 (保持你原本的逻辑)
-V(ig2.mb)$degree <- igraph::degree(ig2.mb)
-ig_connected_safe <- delete_vertices(ig2.mb, V(ig2.mb)[degree < 2])
-
-# 2. 绘图 (修改配色)
-plot_network(ig_connected_safe, ps_grouped, type = 'taxa', color = "Genus", point_size = 4, layout.method = layout.grid
-) +
-  scale_color_manual(values = genus_colors, breaks = names(genus_colors)) + 
-  labs(title = "Safe Network Plot", subtitle = "Removed nodes with degree < 2") +
-  theme_void() +
-  theme(legend.position = "right")
-```
-
-
-
-### Gephi 可视化文件构建
-
+网络绘制的节点，虽有一些节点并非孤立，但并不在主网络中，可能会影响后续的分析结果因此这些在可视化上应该剔除。
 这里根据之前的过滤结果构建文件，在构建文件中加入模块化计算(Gephi自带模块化的计算，单算法单一，且不能设置随机种子结果无法可重复)，加入设定的分组信息，物种注释，高低细胞数量富集物种等信息方便绘制Gephi可视化。
 
 
 ```{r}
-g <- ig_connected_safe 
+library(rgexf) 
 
-# ================= 0. 准备配色信息 =================
-genus_colors <- readRDS("./data/dada2/microplate/top10_genus_colors.rds")
-if (!"Other" %in% names(genus_colors)) {
-  genus_colors <- c(genus_colors, "Other" = "#DDDDDD") 
-}
-
-
-# ================= 1. 【终极致敬】提取 SLR 算法原生的正负权重与粗细 =================
+# ================= 1. 提取 SLR 原生权重并重建网络 =================
+# 直接从底层提取带符号和权重的矩阵，并构建网络
 vertex_attr <- data.frame(tax_table(ps_grouped)) |> tibble::rownames_to_column("name")
 refit_net <- as.matrix(getRefit(se.slr.amgut))
-opt_ind <- getOptInd(se.slr.amgut)
-raw_icov <- se.slr.amgut$est$icov[[opt_ind]]
-dense_icov <- as.matrix(raw_icov)
-native_weight_mat <- -cov2cor(dense_icov)
-diag(native_weight_mat) <- 0 # 去除对角线的自我相关
+raw_icov <- as.matrix(se.slr.amgut$est$icov[[getOptInd(se.slr.amgut)]])
+
+native_weight_mat <- -cov2cor(raw_icov)
+diag(native_weight_mat) <- 0 # 去除对角线自相关
 weighted_mat <- refit_net * native_weight_mat
+
 ig2.mb <- adj2igraph(weighted_mat, vertex.attr = vertex_attr)
 V(ig2.mb)$degree <- igraph::degree(ig2.mb)
-g <- delete_vertices(ig2.mb, V(ig2.mb)[degree < 2])
-# ================= 2. 修复权重报错 =================
-if(!is.null(E(g)$weight)) {
-  E(g)$thickness   <- abs(E(g)$weight)
-  E(g)$interaction <- ifelse(E(g)$weight > 0, "Positive", "Negative")
-  g <- delete_edge_attr(g, "weight")
-}
-# ================= 2.5 计算每个节点的正负连线数量 =================
-# 逻辑：把网络拆成“纯正网络”和“纯负网络”，分别数连线，再把数字存回主网络
+g <- delete_vertices(ig2.mb, V(ig2.mb)[degree < 2]) # 过滤掉度数 < 2 的节点
+
+# ================= 2. 处理边属性 (正负互作与粗细) =================
+E(g)$thickness   <- abs(E(g)$weight)
+E(g)$interaction <- ifelse(E(g)$weight > 0, "Positive", "Negative")
+g <- delete_edge_attr(g, "weight") # 删掉原权重防止 write.gexf 报错
+
+# ================= 3. 计算节点拓扑与模块化 =================
+# 计算正负子网络的度
 g_pos <- subgraph_from_edges(g, E(g)[interaction == "Positive"], delete.vertices = FALSE)
 g_neg <- subgraph_from_edges(g, E(g)[interaction == "Negative"], delete.vertices = FALSE)
 
 V(g)$Degree_Total    <- igraph::degree(g)
 V(g)$Degree_Positive <- igraph::degree(g_pos)
 V(g)$Degree_Negative <- igraph::degree(g_neg)
-#正负比率 (防止分母为0，加个极小值)
 V(g)$Pos_Neg_Ratio   <- V(g)$Degree_Positive / (V(g)$Degree_Negative + 0.001)
 
-# ================= 3. PC5 映射 =================
-raw_vals <- as.numeric(pca$loadings[5, ])
-names(raw_vals) <- taxa_names(ps_final)
-net_names_clean <- V(g)$name %>% str_remove("^X\\.") %>% str_remove("^X")
+# Louvain 聚类计算模块 (固定随机种子保证可重复)
+set.seed(123) 
+V(g)$module <- as.numeric(membership(cluster_louvain(g, weights = E(g)$thickness)))
+
+# ================= 4. 映射外部生物学特征 =================
+# 清洗名称并提取物种、PC5得分
+net_names_clean <- str_remove(V(g)$name, "^X\\.?")
+tax_df <- as.data.frame(tax_table(ps_final))
+
+V(g)$Phylum <- as.character(tax_df[net_names_clean, "Phylum"])
+V(g)$Genus  <- as.character(tax_df[net_names_clean, "Genus"])
+V(g)$Label  <- V(g)$name
+
+raw_vals <- setNames(as.numeric(pca$loadings[5, ]), taxa_names(ps_final))
 matched_scores <- raw_vals[net_names_clean]
 
-if (all(is.na(matched_scores))) {
-  stop("错误：所有节点的 PC5 分数都未能匹配！")
-} else {
-  message("成功匹配到 PC5 数据的节点数: ", sum(!is.na(matched_scores)))
-}
+if (all(is.na(matched_scores))) stop("错误：PC5 分数匹配失败！")
 
-# ================= 4. 写入属性 (数据准备) =================
-# --- 4.1 基础属性 ---
 V(g)$PC5_Score <- matched_scores
 V(g)$Density_Class <- case_when(
   matched_scores > 0 ~ "High_Density",
@@ -620,65 +520,33 @@ V(g)$Density_Class <- case_when(
   TRUE ~ "Neutral"
 )
 
-# --- 4.2 模块化 ---
-set.seed(123) 
-use_weight <- if(!is.null(E(g)$thickness)) E(g)$thickness else NULL
-wt_c <- cluster_louvain(g, weights = use_weight)
-V(g)$module <- as.numeric(membership(wt_c)) 
+genus_colors <- readRDS("./data/dada2/microplate/top10_genus_colors.rds")
+if (!"Other" %in% names(genus_colors)) genus_colors["Other"] <- "#DDDDDD"
 
-# --- 4.3 物种信息 ---
-tax <- as.data.frame(tax_table(ps_final))
-V(g)$Phylum <- as.character(tax[net_names_clean, "Phylum"])
-V(g)$Genus  <- as.character(tax[net_names_clean, "Genus"])
-V(g)$Label  <- V(g)$name
-
-# --- 4.4 颜色映射 (HEX) ---
 matched_hex <- genus_colors[V(g)$Genus]
-matched_hex[is.na(matched_hex)] <- genus_colors["Other"]
-V(g)$color_hex <- matched_hex # 存入 HEX 以便后续使用
+V(g)$color_hex <- ifelse(is.na(matched_hex), genus_colors["Other"], matched_hex)
 
+# ================= 5. 高效导出 GEXF =================
+# 提取节点和边的全属性表
+node_df <- igraph::as_data_frame(g, what = "vertices")
+edge_df <- igraph::as_data_frame(g, what = "edges")
 
-# ================= 5. 【核心修改】导出为 GEXF (包含节点数据+颜色+边属性) =================
+# 【优化点】剔除会在 Gephi 中造成列重复和冲突的保留字段
+nodes_meta <- node_df[, !colnames(node_df) %in% c("name", "Label", "color_hex"), drop = FALSE]
+edges_meta <- edge_df[, !colnames(edge_df) %in% c("from", "to", "thickness"), drop = FALSE]
 
-# A. 提取所有节点数据 (包含 PC5, module, Genus 等)
-node_data_df <- igraph::as_data_frame(g, what = "vertices")
-
-# B. 准备 Gephi 视觉颜色 (RGB + Alpha透明度)
-rgb_mat <- t(col2rgb(node_data_df$color_hex))
-viz_color <- cbind(rgb_mat, a = 1.0) 
-
-# C. 准备节点大小 
-viz_size <- rep(20, vcount(g)) 
-
-# D. 【新增】提取所有边数据及属性
-edge_data_df <- igraph::as_data_frame(g, what = "edges")
-# 剥离出 from 和 to，剩下的就是边属性 (interaction, thickness 等)
-edge_attr_df <- edge_data_df[, !(colnames(edge_data_df) %in% c("from", "to")), drop = FALSE]
-
-# E. 导出文件
 write.gexf(
-  nodes = data.frame(id = V(g)$name, label = V(g)$Label), 
-  edges = edge_data_df[, c("from", "to")], 
-  
-  # 【关键修改 1】直接将 thickness 映射为 Gephi 的默认边权重 (Weight)
-  edgesWeight = edge_data_df$thickness, 
-  
-  # 【关键修改 2】nodesAtt 保留节点属性
-  nodesAtt = node_data_df, 
-  
-  # 【关键修改 3】edgesAtt 传入边属性，保证 Positive/Negative 成功导入
-  edgesAtt = edge_attr_df, 
-  
+  nodes       = data.frame(id = node_df$name, label = node_df$Label), 
+  edges       = edge_df[, c("from", "to")], 
+  edgesWeight = edge_df$thickness, 
+  nodesAtt    = nodes_meta, 
+  edgesAtt    = edges_meta, 
   nodesVizAtt = list(
-    color = viz_color, 
-    size = viz_size
+    color = cbind(t(col2rgb(node_df$color_hex)), a = 1.0), 
+    size  = rep(20, vcount(g))
   ),
-  
-  output = "network_perfect_color.gexf"
+  output      = "network_perfect_color.gexf"
 )
 
-message("导出成功！请在 Gephi 中打开 'network_perfec1_color.gexf'。")
-message("1. 节点颜色会自动显示。")
-message("2. 边的粗细已自动映射为 Gephi 的权重 (Weight)。")
+message("导出成功！请在 Gephi 中打开 'network_perfect_color.gexf'。")
 ```
-

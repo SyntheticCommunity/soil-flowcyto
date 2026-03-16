@@ -122,7 +122,7 @@ md <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# 6. 跑 FEAST（用 C++ 接口，默认输出去噪后的 pred_em_all）
+# 6. FEAST（用 C++ 接口，默认输出去噪后的 pred_em_all）
 res <- FEAST::FEAST(
   C                      = C_mat,
   metadata               = md,

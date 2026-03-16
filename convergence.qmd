@@ -22,7 +22,6 @@ top10_genus_colors = readRDS("./data/dada2/microplate/top10_genus_colors.rds")
 
 
 ```{r}
-# -------------------- 1. 聚合到 Genus 级别并计算相对丰度 --------------------
 ps_genus = tax_glom(physeq, "Genus")
 ps_relabund = transform_sample_counts(ps_genus, function(x) x / sum(x, na.rm = TRUE))
 df = psmelt(ps_relabund) |> 
@@ -31,7 +30,6 @@ df = psmelt(ps_relabund) |>
 
 # 计算均值和标准误
 df_mod = df |> 
-  #filter(Genus != "Other") |> 
   group_by(carbon, cell_num, Genus) |> 
   summarise(
     meanAbundance = mean(Abundance),

@@ -131,9 +131,6 @@ tax_lite = tax |>
     mutate(Genus = ifelse(Genus %in% genus_keep, Genus, "Other")) |> 
     mutate(Genus = factor(Genus, levels = c(genus_keep, "Other")))
 
-#genus_fill_cols = c(RColorBrewer::brewer.pal(n = length(genus_keep), name = "Paired"), "grey")
-
-# 3. 绘制图形
 genus_plot = ggplot(tax_lite, aes(label, 1, fill = Genus)) +
     geom_tile() +
     labs(y = "Genus") +
@@ -146,7 +143,6 @@ genus_plot = ggplot(tax_lite, aes(label, 1, fill = Genus)) +
           axis.title.y = element_text(angle = 0)
     )
 
-# 4. 查看图形
 print(genus_plot)
 ```
 
