@@ -20,14 +20,12 @@ library(ggplot2)
 library(dplyr)
 ```
 
-
-### 加载
+### 加载数据集
 
 ```{r}
 physeq <- readRDS("./data/dada2/microplate/physeq.rds") 
 physeq_filtered <- readRDS("./data/dada2/soil/filtered/physeq.rds") 
 ```
-
 
 ### 多样性分析
 
