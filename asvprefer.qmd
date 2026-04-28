@@ -230,4 +230,3 @@ p_combined <- ggplot(plot_data_agg, aes(x = as.factor(cell_num),
 print(p_combined)
 ```
 
-

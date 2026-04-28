@@ -208,6 +208,3 @@ final_plot <- wrap_plots(as.patchwork(main_panel), legend_panel, ncol = 1) +
 print(final_plot)
 ```
 
-
-
-

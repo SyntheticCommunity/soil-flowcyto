@@ -132,5 +132,3 @@ print(final_plot)
 ```
 
 
-
-

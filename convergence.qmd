@@ -139,5 +139,3 @@ p_ancombc_facet <- ggplot(plot_df, aes(x = comparison, y = LFC, fill = taxon)) +
 print(p_ancombc_facet)
 ```
 
-
-

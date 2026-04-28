@@ -296,5 +296,3 @@ p = plot_grid(plot_grid(plotlist = plots, labels = "auto"), legend, ncol = 2, re
 
 p
 ```
-
-

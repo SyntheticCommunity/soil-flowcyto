@@ -138,7 +138,6 @@ genus_plot = ggplot(tax_lite, aes(label, 1, fill = Genus)) +
 print(genus_plot)
 ```
 
-
 ### 按属分类的相对丰度
 
 ```{r}

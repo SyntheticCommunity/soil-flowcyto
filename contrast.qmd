@@ -107,5 +107,3 @@ p2 <- ggplot(fresh_df, aes(x = type, y = Shannon, fill = Group)) +
 print(p2)
 ```
 
-
-
