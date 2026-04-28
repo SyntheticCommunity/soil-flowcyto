@@ -23,7 +23,7 @@ library(dplyr)
 ### 加载数据集
 
 ```{r}
-physeq <- readRDS("./data/dada2/microplate/physeq.rds") 
+physeq <- readRDS("./data/dada2/microplate/filtered/physeq.rds") 
 physeq_filtered <- readRDS("./data/dada2/soil/filtered/physeq.rds") 
 ```
 
@@ -50,7 +50,7 @@ alpha_all <- bind_rows(alpha_physeq, alpha_filtered) %>%
 ```{r}
 fresh_df <- alpha_all %>%
   filter(storage %in% c("fresh", "All")) %>%
-  mutate(type = factor(type, levels = c("All", "cell", "soil")))
+  mutate(type = factor(type, levels = c("soil", "cell", "All")))
 
 kw <- kruskal.test(Shannon ~ type, data = fresh_df)
 
@@ -73,16 +73,18 @@ pos_df <- fresh_df %>%
 
 p2 <- ggplot(fresh_df, aes(x = type, y = Shannon, fill = Group)) +
   geom_boxplot(position = position_dodge(width = 0.75)) +
+  # 【修改点2】：同步调整 X 轴的 breaks 和 labels 顺序
   scale_x_discrete(
     name   = "",
-    breaks = c("All", "cell", "soil"),
-    labels = c("flowcyto", "cell", "soil")
+    breaks = c("soil", "cell", "All"),
+    labels = c("soil", "cell", "flowcyto")
   ) +
+  # 【修改点3】：同步调整图例 (Legend) 的排列顺序，让图例和 X 轴保持一致的视觉顺序
   scale_fill_manual(
     name   = "Group",
-    breaks = c("physeq", "fresh_cell", "fresh_soil"),
-    values = c(physeq = "#0072B2", fresh_cell = "#D55E00", fresh_soil = "#009E73"),
-    labels = c(physeq = "flowcyto", fresh_cell = "cell", fresh_soil = "soil")
+    breaks = c("fresh_soil", "fresh_cell", "physeq"),
+    values = c(fresh_soil = "#009E73", fresh_cell = "#D55E00", physeq = "#0072B2"),
+    labels = c(fresh_soil = "soil", fresh_cell = "cell", physeq = "flowcyto")
   ) +
   labs(title = "Alpha diversity (Shannon)", y = "Shannon diversity") +
   coord_fixed(ratio = 0.8) +
@@ -103,8 +105,7 @@ p2 <- ggplot(fresh_df, aes(x = type, y = Shannon, fill = Group)) +
   )
 
 print(p2)
-
-#graph2ppt(x =p2, file = "contrast-sup.pptx" , append = TRUE)
 ```
+
 
 

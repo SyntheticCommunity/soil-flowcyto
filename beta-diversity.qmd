@@ -21,12 +21,7 @@ theme_set(theme_bw())
 ## 读取数据集
 
 ```{r}
-physeq <- readRDS("./data/dada2/microplate/filtered/physeq.rds") #读取
-```
-
-### 配色加载
-
-```{r}
+physeq <- readRDS("./data/dada2/microplate/filtered/physeq.rds") 
 my_saved_colors <- readRDS("./data/dada2/microplate/factor_colors.rds" )
 ```
 
@@ -43,7 +38,6 @@ cell_num_levels <- sample_data(physeq)[["cell_num"]] |> unique() |> sort()
 #| label: fig-asv-overlapping-by-carbon
 #| fig-cap: "不同碳源条件下微生物群落的ASV重叠情况"
 
-# 提取每个 carbon 水平下的 ASV 列表
 data_list = lapply(carbon_levels, function(this_carbon){
   meta = as(sample_data(physeq), "data.frame")
   keep_id = rownames(meta[meta$carbon == this_carbon, ])
@@ -58,8 +52,6 @@ p = ggVennDiagram(data_list, label = "count", label_alpha = 0) +
   scale_x_continuous(expand = expansion(0.1))
 
 p
-
-#graph2ppt(p, file = "venn.ppt",append =TRUE)
 ```
 
 
@@ -115,7 +107,6 @@ p = ggVennDiagram(data_list, label = "count", label_alpha = 0) +
 
 p
 
-#graph2ppt(p, file = "venn.ppt",append =TRUE)
 ```
 
 这幅韦恩图（Venn Diagram）从**初始细胞数量（起始浓度）**维度展示了微生物群落中 ASV（或物种）的组成与重叠情况。
@@ -181,8 +172,33 @@ p = cowplot::plot_grid(plotlist = plots, labels = "auto")
 
 p
 
-#graph2ppt(p, file = "venn.ppt",append =TRUE)
 ```
+
+```{r}
+meta_df = as(sample_data(physeq), "data.frame")
+plots = lapply(cell_num_levels, function(this_cell_num){
+  data_list = lapply(carbon_levels, function(this_carbon){
+    keep_id = rownames(meta_df[meta_df$carbon == this_carbon & meta_df$cell_num == this_cell_num, ])
+    ps_sub = prune_samples(keep_id, physeq)
+    ps_final = prune_taxa(taxa_sums(ps_sub) > 0, ps_sub)
+    taxa_names(ps_final)
+  })
+  names(data_list) = carbon_levels
+  p = ggVennDiagram(data_list, label = "count", label_alpha = 0) +
+    scale_fill_gradient(low = "white", high = "firebrick", limits = c(0, 60)) +
+    labs(title = paste("", this_cell_num)) + 
+    theme(legend.position = "none",
+          plot.title = element_text(hjust = 0.5, face = "bold"))
+  return(p)
+})
+
+p = cowplot::plot_grid(plotlist = plots, labels = "auto")
+
+print(p)
+```
+
+
+
 
 ##  不同初始细胞数分组之间微生物群落结构存在显著差异
 
@@ -201,11 +217,9 @@ PERMANOVA 的显著结果可能由两个原因引起：
 
 ```{r}
 plot_pcoa_res = function(physeq, group_var = "cell_num", shape_var = "carbon"){
-  # 计算距离矩阵和排序
   pcoa_res = ordinate(physeq, method = "PCoA", distance = "bray")
   dist_mat = phyloseq::distance(physeq, method = "bray")
 
-  # 统计检验 (PERMANOVA)
   metadata = data.frame(sample_data(physeq))
   formula_str = as.formula(paste("dist_mat ~", group_var))
   
@@ -216,13 +230,11 @@ plot_pcoa_res = function(physeq, group_var = "cell_num", shape_var = "carbon"){
   p_val = ad_res$`Pr(>F)`[1]
   p_label = if(p_val < 0.001) "< 0.001" else round(p_val, 3)
 
-  # 绘图数据
   pc1_exp = round(pcoa_res$values$Relative_eig[1] * 100, 2)
   pc2_exp = round(pcoa_res$values$Relative_eig[2] * 100, 2)
   stats_label = paste0("R^2 == ", r2_val, " * ',' ~ p == ", p_label)
   plot_data = plot_ordination(physeq, pcoa_res, justDF = TRUE)
 
-  # 绘图
   ggplot(plot_data, aes(.data[["Axis.1"]], .data[["Axis.2"]], color = factor(.data[[group_var]]))) +
     geom_point(mapping = if(!is.null(shape_var)) aes(shape = factor(.data[[shape_var]]))) +
     stat_ellipse(aes(group = .data[[group_var]]), linetype = 2, size = 0.3, show.legend = FALSE, type = "t") +
@@ -248,24 +260,17 @@ for (this_carbon in carbon_levels){
   
   p = plot_pcoa_res(ps_final, shape_var = NULL) +
     scale_color_manual(values = my_saved_colors$cell) +
-    # 你可以根据需要调整这个数字，比如 0.15 或 0.3
     scale_y_continuous(expand = expansion(mult = 0.3)) + 
-    
-    # 如果想同时增加X轴留白，可以加上这句：
-    # scale_x_continuous(expand = expansion(mult = 0.2)) +
-    
     labs(color = "cell num", subtitle = this_carbon) +
     theme(legend.position = "none", aspect.ratio = 1)
     
   plots[[this_carbon]] = p
 }
 
-# 后面的拼图代码保持不变
 legend = get_legend(plots[[1]] + theme(legend.position = "right"))
 p = plot_grid(plot_grid(plotlist = plots, labels = "auto"), legend, ncol = 2, rel_widths = c(3, 0.4))
 
 p
-#graph2ppt(p, file = "beta-diversity.pptx",append = T)
 ```
 
 ### 不同碳源群落表型群落多样性
@@ -277,16 +282,9 @@ plots = list()
 for (this_carbon in carbon_levels){
   ps_sub = subset_samples(physeq, carbon == this_carbon)
   ps_final = prune_taxa(taxa_sums(ps_sub) > 0, ps_sub)
-  
   p = plot_pcoa_res(ps_final, group_var = "class", shape_var = NULL) +
     scale_color_manual(values = my_saved_colors$class) +
-    
-    # mult = 0.2 表示在 Y 轴上下各增加 20% 的空间
     scale_y_continuous(expand = expansion(mult = 0.3)) + 
-    
-    # 如果觉得 X 轴太挤，也可以把下面这行的注释取消掉：
-    # scale_x_continuous(expand = expansion(mult = 0.2)) + 
-    
     labs(color = "class", subtitle = this_carbon) +
     theme(legend.position = "none" ,aspect.ratio = 1)
   
@@ -297,7 +295,6 @@ legend = get_legend(plots[[1]] + theme(legend.position = "right"))
 p = plot_grid(plot_grid(plotlist = plots, labels = "auto"), legend, ncol = 2, rel_widths = c(3, 0.4))
 
 p
-#graph2ppt(p, file = "beta-diversity.pptx",append = T)
 ```
 
 

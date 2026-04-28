@@ -11,13 +11,16 @@
 library(phyloseq)
 library(tidyverse)
 library(export)
+library(ggpubr)
 theme_set(theme_bw())
 ```
 
 ### 加载数据集
 
 ```{r}
+library(phyloseq)
 physeq = readRDS("./data/dada2/microplate/filtered/physeq.rds")
+sample_data(physeq)$cell_num = as.factor(sample_data(physeq)$cell_num)
 
 physeq
 ```
@@ -25,6 +28,9 @@ physeq
 ### 测序抽平
 
 ```{r}
+# sample.size: 抽平到的深度（通常取所有样本中的最小值，或者一个固定的阈值）
+# rngseed: 必须设置随机数种子，保证结果可重复
+set.seed(123)
 ps_rare <- rarefy_even_depth(physeq, 
                              sample.size = 20000, 
                              rngseed = 123, 
@@ -32,6 +38,24 @@ ps_rare <- rarefy_even_depth(physeq,
 
 ps_rare
 ```
+
+```{r}
+plot_richness(ps_rare, x = "cell_num", measures = c("Observed", "Shannon", "Chao1", "Simpson")) +
+  geom_boxplot() +
+  stat_compare_means(method = "kruskal.test", label = "p.format") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+plot_richness(ps_rare, x = "carbon", measures = c("Observed", "Shannon", "Chao1", "Simpson")) +
+  geom_boxplot() +
+  stat_compare_means(method = "kruskal.test", label = "p.format") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+plot_richness(ps_rare, x = "class", measures = c("Observed", "Shannon", "Chao1", "Simpson")) +
+  geom_boxplot() +
+  stat_compare_means(method = "kruskal.test", label = "p.format") +
+  theme(axis.text.x = element_text(angle = 30, hjust = 1))
+```
+
 
 
 ## 构建多样性分析数据集
@@ -69,8 +93,42 @@ plots = lapply(c("carbon","cell_num","class"), function(x){
 final_plot =cowplot::plot_grid(plotlist = plots, nrow = 1, labels = "auto", align = "hv")
 
 print(final_plot)
+```
 
-#graph2ppt(final_plot, file = "shannon-index.ppt")
+```{r}
+richness_df = estimate_richness(ps_rare, measures = c("Chao1", "Observed")) |> 
+    mutate(sampleID = sample_names(ps_rare)) |> 
+    left_join(data.frame(sample_data(ps_rare)) |> mutate(sampleID = as.character(sampleID)), by = "sampleID") |> 
+    mutate(cell_num = as_factor(cell_num),
+           carbon = factor(carbon),
+           growth = str_sub(class, 1, 2),
+           biofilm = str_sub(class, 3, 4)
+           ) |> 
+    as_tibble()
+
+plots_chao1 = lapply(c("carbon","cell_num","class"), function(x){
+    ggplot(richness_df, aes(.data[[x]], Chao1)) +
+        geom_boxplot(outlier.shape = NA) + 
+        geom_jitter(data = function(d) dplyr::slice_sample(d, prop = 0.2), 
+                   alpha = 0.5, size = 1.2, color = "gray30") + 
+        stat_compare_means(method = "kruskal.test", label = "p.format") +
+        labs(x = NULL, y = "Chao1 Index") +
+        theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 10), aspect.ratio = 1.2)
+})
+
+plots_obs = lapply(c("carbon","cell_num","class"), function(x){
+    ggplot(richness_df, aes(.data[[x]], Observed)) +
+        geom_boxplot(outlier.shape = NA) +
+        geom_jitter(data = function(d) dplyr::slice_sample(d, prop = 0.2), 
+                   alpha = 0.5, size = 1.2, color = "gray30") + 
+        stat_compare_means(method = "kruskal.test", label = "p.format") +
+        labs(x = NULL, y = "Observed Index") +
+        theme(axis.text.x = element_text(angle = 30, hjust = 1, size = 10), aspect.ratio = 1.2)
+})
+
+final_plot = cowplot::plot_grid(plotlist = c(plots_chao1, plots_obs), nrow = 2, labels = "auto", align = "hv")
+
+print(final_plot)
 ```
 
 

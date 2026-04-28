@@ -26,7 +26,6 @@ gseaRes_P = run_microbiome_gsea(
     sample_feat = c("carbon","cell_num","class"), 
     taxon_rank = "Genus")
 
-# 查看计算结果
 gseaRes_P
 ```
 
@@ -71,7 +70,6 @@ gseaRes_K = run_microbiome_gsea(
     sample_feat = c("carbon","cell_num","class"), 
     taxon_rank = "Genus")
 
-# 查看计算结果
 gseaRes_K
 
 ```

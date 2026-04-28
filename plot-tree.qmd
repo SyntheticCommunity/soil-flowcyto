@@ -7,22 +7,20 @@
 
 ```{r}
 library(phyloseq)
-
-ps_file = xfun::magic_path("microplate/filtered/physeq.rds")
-ps = readRDS(ps_file)
-
-ps
+library(ggplot2)
+library(ggtree)
+library(tidytree)
+library(aplot)
 ```
 
 ## Plot Tree
 
 ```{r}
-library(ggplot2)
-library(ggtree)
-library(tidytree)
-library(aplot)
-
 theme_set(theme_bw())
+ps_file = xfun::magic_path("microplate/filtered/physeq.rds")
+ps = readRDS(ps_file)
+
+ps
 ```
 
 ### 分类信息
@@ -52,10 +50,7 @@ ggtree(tree, layout = "rectangular") %<+% tax +
 使用 `groupOTU()` 函数，会递归地将分支信息应用到整个进化支上。
 
 ```{r}
-# 按 Phylum 分组
 group_list = split(tax$label, tax$Phylum)
-
-# 将分组信息传递给树对象
 tree_grouped = groupOTU(tree, group_list)
 
 tree_plot = ggtree(tree_grouped, branch.length = "none", aes(color = group)) +
@@ -73,7 +68,6 @@ tree_plot
 phylum_plot = ggplot(tax, aes(label, 1, fill = Phylum)) +
     geom_tile() +
     labs(y = "Phylum") +
-   # scale_y_continuous(expand = c(0, 0)) +
     theme(legend.position = "none",
           axis.text = element_blank(),
           axis.ticks = element_blank(),
@@ -84,9 +78,7 @@ phylum_plot = ggplot(tax, aes(label, 1, fill = Phylum)) +
 phylum_plot
 ```
 
-
 ### 相对丰度
-
 
 ```{r}
 abundance_df = data.frame(otu_table(ps)) |> 
@@ -199,5 +191,4 @@ tree = genus_plot |>
        insert_bottom(abundance_plot2, height = 12)
 
 tree
-#graph2pdf(tree, file = "treeplot.pdf")
 ```

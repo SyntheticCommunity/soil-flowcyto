@@ -21,6 +21,7 @@ library(rgexf)
 library(Matrix)
 ```
 
+
 ## 三种方式构建网络的差异
 
 SparCC 不一定比 SLR/Glasso/MB 差，它们只是适用场景、假设和建模目标不同。
@@ -66,7 +67,6 @@ rename_asv <- function(physeq, prefix="ASV"){
   taxa_names(physeq) <- new_names
   physeq}
 
-# 用法
 physeq <- rename_asv(physeq, prefix="ASV")
 ```
 
@@ -81,6 +81,7 @@ physeq <- rename_asv(physeq, prefix="ASV")
 ps_final <- prune_taxa(taxa_sums(physeq) > 0, physeq)
 ```
 
+
 ### SLR方法构建网络
 
 ```{r}
@@ -88,28 +89,45 @@ se.slr.amgut <- spiec.easi(ps_final, method='slr', r=10, lambda.min.ratio=1e-4,
                            nlambda=50, pulsar.params=list(rep.num=50, ncores=1))
 ```
 
-### 提取潜在变量
+```{r}
+se.slr.amgut <- readRDS("./data/se.slr.amgut.rds")
+```
+
+### 提取潜在变量和贡献计算
 
 ```{r}
-# 提取slr方法分离出的“低秩”成分（即潜在变量效应）
 X <- se.slr.amgut$est$data
 L <- se.slr.amgut$est$resid[[getOptInd(se.slr.amgut)]]
 
-# 用PCA方法对这些效应进行分析和可视化
 pca <- robustPCA(X, L)
 
-# 检查这些潜在变量效应是否与已知的样本信息（元数据）相关
-known_vars = sample_data(ps_final) |> as_tibble() |> select(!contains("id")) |> colnames()
-known_vars_cor = lapply(known_vars, function(var){
-  value = sample_data(ps_final)[[var]]
-  if (!is.numeric(value)){
-    value = as_factor(value) |> as.numeric()
-  }
-  cor(value, pca$scores, use = "pairwise", method = "kendall")
-})
+meta_df <- sample_data(ps_final) |> as_tibble() |> select(!contains("id"))
+scores_mat <- pca$scores[, 1:10]
 
-names(known_vars_cor) = known_vars
-known_vars_cor
+all_vars <- colnames(meta_df)
+r2_matrix <- matrix(0, nrow = length(all_vars) + 1, ncol = 10, 
+                    dimnames = list(c(all_vars, "carbon_x_cell_num"), paste0("PC", 1:10)))
+
+for(i in 1:10) {
+  current_pc <- scores_mat[, i]
+  for(var in all_vars) {
+    val <- meta_df[[var]]
+    model_data <- if(is.numeric(val) || var == "cell_num") as.numeric(as.character(val)) else as.factor(val)
+    
+    if(length(unique(na.omit(model_data))) > 1) {
+      adj_r2 <- summary(lm(current_pc ~ model_data))$adj.r.squared
+      r2_matrix[var, i] <- max(0, adj_r2)
+    }
+  }
+  
+  fit_main  <- lm(current_pc ~ as.factor(carbon) + as.numeric(as.character(cell_num)), data = meta_df)
+  fit_inter <- lm(current_pc ~ as.factor(carbon) * as.numeric(as.character(cell_num)), data = meta_df)
+  
+  delta_r2 <- summary(fit_inter)$adj.r.squared - summary(fit_main)$adj.r.squared
+  r2_matrix["carbon_x_cell_num", i] <- max(0, delta_r2)
+}
+
+print(round(r2_matrix, 3))
 ```
 
 ### 潜变量数值矩阵理解
@@ -188,7 +206,6 @@ known_vars_cor
 **结论:** 
 
 你的"PC5"准确来说是 **"Latent Component 5"(潜在成分5)**。
-
 ---
 
 #### 为什么不用解释率最高的 PC1/PC2?
@@ -217,199 +234,18 @@ known_vars_cor
 虽然 PC5 解释率只有5%,但它是**唯一一个与"初始细胞数"(Cell Num)强相关的维度**。这才是我们要研究的核心变量!
 
 ```{r}
-cor_mat <- do.call(rbind, known_vars_cor)
-rownames(cor_mat) <- names(known_vars_cor)
-colnames(cor_mat) <- paste0("PC", 1:ncol(cor_mat))
-
-pheatmap::pheatmap(
-  cor_mat, 
-  cluster_rows = FALSE, 
-  cluster_cols = FALSE, 
-  angle_col = 0)
-```
-
-### 基于稀疏潜在回归（SLR）的密度依赖性验证
-
-1. 为什么要进行这个分析？（Rationale & Principle）
-
-从“整体”到“机制”的聚焦： 虽然我们通过相关性热图（Heatmap）初步发现了PC5（LatentComponent5）与初始细胞数（cell_num）有极强的整体相关性（Kendall's tau = 0.46），但这只是一个总体的统计数字。我们需要进一步验证这种相关性是否在每一种碳源环境下都稳健存在。
-
-验证“密度效应”的普遍性： 如果不拆分碳源看，有可能这个趋势只在某一种特定的碳源（比如葡萄糖）里存在，而在其他碳源里不存在。通过循环绘制每种碳源的回归图，我们可以检验：初始细胞密度对群落结构的驱动作用，是否是一个跨环境的普遍规律（General Rule）？
-
-数学原理：
-Y轴（Latent Effect / PC5 Scores）：代表了通过 SLR 降维提取出的、去除了噪音后的群落结构特征值。
-X轴（Initial Cell Num）：代表实验处理梯度。
-
-Kendall 相关性检验：由于细胞数（10, 50, 100, 250）并非严格的连续正态分布数据，使用非参数的 Kendall 相关系数能更严谨地评估“单调趋势”（即：细胞数越多，PC5 数值是否单向增加/减少）。
-
-2. 图表说明了什么？（Interpretation of Results）
-
-强烈的线性/单调响应： 如果在绝大多数碳源的图中，你都观察到了显著的值（p<0.05）和较高的R值（相关系数），且回归线呈现明显的上升或下降趋势，这说明：群落结构（PC5）随着初始接种密度的增加发生了有规律的定向偏移。
-
-低接种量 vs. 高接种量的分异： 图中的散点颜色（10, 50, 100, 250）分层明显（例如红色点和紫色点在 Y 轴上拉得很开），直观地展示了**“历史依赖性”（PriorityEffect）或“阿利效应”（AlleeEffect）**在群落构建中的作用——起始条件的微小差异（细胞数），最终被放大成了群落结构的巨大差异（PC5得分）。
-碳源间的异质性（如果存在）： 如果在某些难利用的碳源中相关性变弱（斜率变平），而在易利用碳源中相关性极强，这提示了**“资源有效性调节了密度依赖强度”**这一深层生态学机制。
-
-3. 对你的结论有什么用？（Significance & Conclusion）
-
-这段分析是支撑你核心论点——“初始细胞密度是微生物群落组装的关键决定因素”——的最有力证据。
-
-它在论文逻辑链条中的作用如下：
-
-排除干扰，锁定信号： 证明了 PC5 不是随机噪音，而是真实反映密度梯度的生物学信号。
-
-```{r}
-my_saved_colors <- readRDS("./data/dada2/microplate/factor_colors.rds")
-
-plot_data <- data.frame(
-  SampleID = sample_names(ps_final),
-  Latent_Effect = pca$scores[, 5], 
-  Carbon = sample_data(ps_final)$carbon,
-  # 确保这里转为因子，以便和颜色列表的 names 对应
-  Initial_Cell_Num = as.factor(sample_data(ps_final)$cell_num)
+p = pheatmap::pheatmap(
+  r2_matrix, 
+  cluster_rows = F,  
+  cluster_cols = FALSE,  
+  angle_col = 0,         
+  display_numbers = F, 
+  number_color = "black", 
+  fontsize_number = 10,  
+  main = "Contribution of Environmental Factors (Adjusted R-squared)"
 )
 
-carbon_list <- unique(plot_data$Carbon)
-plot_list <- list()
-
-for (carb in carbon_list) {
-  
-  sub_data <- subset(plot_data, Carbon == carb)
-  
-  p <- ggplot(sub_data, aes(x = Initial_Cell_Num, y = Latent_Effect)) +
-    geom_point(aes(color = Initial_Cell_Num), size = 4, alpha = 0.8) + 
-    geom_smooth(method = "lm", aes(group = 1), color = "black", linetype = "dashed", se = TRUE) + 
-    scale_color_manual(values = my_saved_colors$cell) +
-    scale_x_discrete(expand = expansion(mult = c(0.1, 0.1))) + 
-    theme_bw() +
-    labs(
-      x = NULL, 
-      y = "",
-      subtitle = carb) +
-    stat_cor(aes(group = 1), method = "kendall", 
-             label.x.npc = "left", label.y.npc = "top", 
-             vjust = 1.5, hjust = 0) +
-    theme(legend.position = "none" )
-  
-  plot_list[[carb]] <- p
-}
-
-cowplot::plot_grid(plotlist = plot_list, labels = "auto")
-```
-
-### 初始细胞数量的富集物种
-
-从部分的结果与之前面的物种折线图想呼应，通过GSEA分析确定细胞数量的影响以，网络分析再次证明细胞数量的影响，以及物种在不同细胞数量的主导作用。
-
-分析解读：密度依赖性群落构建的分类学驱动因子
-
-1. 为什么使用这个分析？（Rationale）
-从“现象”深入到“物种”： 前一步的分析已经确立了 PC5 是响应初始细胞密度的主轴。但是，PC5 只是一个抽象的数学数值。如果不找出构成 PC5 的具体物种，你的结论就只能停留在“群落结构变了”，而无法回答**“到底是谁变了？”以及“是谁导致了这种变化？”**。
-
-寻找指示物种 (Biomarkers)： 我们需要明确界定哪些物种是**“高密度偏好型”（High-density specialists），哪些是“低密度偏好型”**（Low-density specialists）。这个分析通过提取 Loadings 的两极（Top 5 正负），精准定位了这两类截然不同的生态功能群。
-
-2. 原理是什么？（Principle）
-
-Loadings（载荷）的生物学含义： 在 SpiecEasi/PCA 分析中，Loadings 代表了每个变量（ASV）对潜在成分（PC5）的贡献度。
-数值大小（绝对值）：代表贡献的权重。Loading 绝对值越大，说明该 ASV 与 PC5 的变化越同步，受密度影响越剧烈。
-
-符号方向 (+/-)：
-正值 (+, >0)：由于 PC5 与 Cell Num 正相关（假设之前的相关性是正的），Loading 为正的菌代表在高密度接种下富集的物种。
-负值 (-, <0)：Loading 为负的菌代表在低密度接种下富集（或在高密度下被抑制）的物种。
-
-3. 说明了什么问题？（Interpretation of Results）
-
-存在截然不同的生态策略： 图表将清晰地展示两组完全不同的菌群。这说明微生物群落中存在明显的分化：一组菌擅长在拥挤、高竞争的环境（High Density）中利用“群体效应”或耐受竞争而繁荣；另一组菌则擅长在稀疏、低竞争的环境（LowDensity）中作为“先锋物种”快速抢占生态位。
-
-优势菌的更替： 这解释了为什么群落结构会随密度变化——不是因为所有菌都一起变多或变少，而是因为特定的优势菌发生了更替。例如，可能某种 Pseudomonas 是低密度王者，而某种 Klebisella 是高密度霸主。
-
-4. 对你的结论有什么用？（Significance）
-
-这个图是你文章**机制讨论（Mechanism Discussion）**的核心支柱：
-
-具体化结论： 你不再空谈“密度效应”，而是可以指名道姓地说：“密度效应主要是由A菌的减少和B菌的增加驱动的。”这让文章的颗粒度更细，说服力更强。
-
-揭示相互作用机制： 如果 High Density 组的菌通常被认为是产生抑菌物质的菌，或者利用群体感应（Quorum Sensing）的菌，你就可以大胆推测：“高密度下的群落构建可能受到了群体感应机制的调控。”
-
-设想的应用价值：这些 Top ASV 可以作为潜在的生物标记物（Biomarkers）。在未来的合成群落构建中，如果想设计一个耐受高密度的体系，就应该优先选择 High Density 组的菌。
-
-```{r}
-
-# ================= 1. 数据准备 (标准流程) =================
-# 1.1 提取 PC5 Loadings
-pc5_loadings <- pca$loadings[5, ] 
-
-# 1.2 构建基础数据框
-drivers_df <- data.frame(
-  ASV_ID = taxa_names(ps_final), 
-  Loading = pc5_loadings
-)
-
-# 1.3 关联分类信息 & 处理 NA
-tax_table_df <- as.data.frame(tax_table(ps_final))
-tax_table_df$ASV_ID <- rownames(tax_table_df)
-tax_table_df$Genus <- as.character(tax_table_df$Genus)
-
-# 将 NA 替换为 "Unclassified"
-tax_table_df$Genus[is.na(tax_table_df$Genus)] <- "Unclassified"
-
-# 合并
-full_drivers <- left_join(drivers_df, tax_table_df, by = "ASV_ID")
-
-# 生成标签: "属名 (ASV_ID)"
-full_drivers$Label <- paste0(full_drivers$Genus, " (", full_drivers$ASV_ID, ")")
-
-# ================= 2. 【核心修改】分别筛选两端的 Top 5 =================
-
-# 2.1 提取正相关前 5 (High Density, Loading 最正)
-top_5_high <- full_drivers %>%
-  filter(Loading > 0) %>%
-  arrange(desc(Loading)) %>% # 从大到小排序
-  head(5)
-
-# 2.2 提取负相关前 5 (Low Density, Loading 最负)
-top_5_low <- full_drivers %>%
-  filter(Loading < 0) %>%
-  arrange(Loading) %>%       # 从小到大排序 (例如 -0.9 在 -0.1 前面)
-  head(5)
-
-# 2.3 合并两组数据
-plot_data_balanced <- bind_rows(top_5_high, top_5_low)
-
-# (可选) 打印名单检查
-print("=== High Density Top 5 ===")
-print(top_5_high[, c("Label", "Loading")])
-print("=== Low Density Top 5 ===")
-print(top_5_low[, c("Label", "Loading")])
-
-# ================= 3. 绘图 (对称蝴蝶图) =================
-p_balanced <- ggplot(plot_data_balanced, aes(x = reorder(Label, Loading), y = Loading, fill = Loading > 0)) +
-  geom_bar(stat = "identity", width = 0.6, color = "black", size = 0.3) +
-  
-  # 翻转坐标轴
-  coord_flip() +
-  
-  # 颜色设置 (红正蓝负)
-  scale_fill_manual(
-    values = c("TRUE" = "#B2182B", "FALSE" = "#2166AC"), 
-    labels = c("Low Density Associated", "High Density Associated"),
-    name = "Ecological Niche"
-  ) +
-  
-  # 标题与标签
-  labs(title = "Top 5 ASVs for Each Density Strategy",
-       subtitle = "Comparing the strongest indicators for Low vs. High Initial Density",
-       x = "Taxonomy (ASV ID)", 
-       y = "Loading Score (Contribution to PC5)") +
-  
-  theme_bw() +
-  theme(
-    plot.title = element_text(face = "bold", hjust = 0.5, size = 14),
-    axis.text.y = element_text(size = 11, face = "italic", color = "black"), 
-    legend.position = "top",
-    panel.grid.minor = element_blank()
-  )
-
-print(p_balanced)
+p
 ```
 
 ## 基于SLR算法的网络可视化
@@ -431,16 +267,14 @@ print(p_balanced)
 #'
 group_low_abundance_taxa <- function(ps_final, n = 10, taxrank = "Genus", other_label = "other") {
   
-  # 1. 识别 top n 和其他的 OTU
+
   otu_sums <- taxa_sums(ps_final)
   top_taxa_names <- names(sort(otu_sums, decreasing = TRUE)[1:min(n, ntaxa(ps_final))])
   other_taxa_names <- taxa_names(ps_final)[!taxa_names(ps_final) %in% top_taxa_names]
   
-  # 2. 修改物种注释表
   physeq_mod <- ps_final
   tt <- as(tax_table(physeq_mod), "matrix")
-  
-  # 在指定级别上标记为 "other"
+
   tt[other_taxa_names, taxrank] <- other_label
   
   tax_table(physeq_mod) <- tax_table(tt)
@@ -448,11 +282,8 @@ group_low_abundance_taxa <- function(ps_final, n = 10, taxrank = "Genus", other_
   return(physeq_mod)
 }
 
-# --- 使用示例 ---
-# 保留前50个OTU，其余的在Genus级别上合并为"other"
 ps_grouped <- group_low_abundance_taxa(ps_final, n = 15, taxrank = "Genus")
 
-# 查看结果
 print(ps_grouped)
 ```
 
@@ -466,27 +297,22 @@ print(ps_grouped)
 ```{r}
 library(rgexf) 
 
-# ================= 1. 提取 SLR 原生权重并重建网络 =================
-# 直接从底层提取带符号和权重的矩阵，并构建网络
 vertex_attr <- data.frame(tax_table(ps_grouped)) |> tibble::rownames_to_column("name")
 refit_net <- as.matrix(getRefit(se.slr.amgut))
 raw_icov <- as.matrix(se.slr.amgut$est$icov[[getOptInd(se.slr.amgut)]])
 
 native_weight_mat <- -cov2cor(raw_icov)
-diag(native_weight_mat) <- 0 # 去除对角线自相关
+diag(native_weight_mat) <- 0 
 weighted_mat <- refit_net * native_weight_mat
 
 ig2.mb <- adj2igraph(weighted_mat, vertex.attr = vertex_attr)
 V(ig2.mb)$degree <- igraph::degree(ig2.mb)
-g <- delete_vertices(ig2.mb, V(ig2.mb)[degree < 2]) # 过滤掉度数 < 2 的节点
+g <- delete_vertices(ig2.mb, V(ig2.mb)[degree < 2]) 
 
-# ================= 2. 处理边属性 (正负互作与粗细) =================
 E(g)$thickness   <- abs(E(g)$weight)
 E(g)$interaction <- ifelse(E(g)$weight > 0, "Positive", "Negative")
-g <- delete_edge_attr(g, "weight") # 删掉原权重防止 write.gexf 报错
+g <- delete_edge_attr(g, "weight") 
 
-# ================= 3. 计算节点拓扑与模块化 =================
-# 计算正负子网络的度
 g_pos <- subgraph_from_edges(g, E(g)[interaction == "Positive"], delete.vertices = FALSE)
 g_neg <- subgraph_from_edges(g, E(g)[interaction == "Negative"], delete.vertices = FALSE)
 
@@ -495,12 +321,9 @@ V(g)$Degree_Positive <- igraph::degree(g_pos)
 V(g)$Degree_Negative <- igraph::degree(g_neg)
 V(g)$Pos_Neg_Ratio   <- V(g)$Degree_Positive / (V(g)$Degree_Negative + 0.001)
 
-# Louvain 聚类计算模块 (固定随机种子保证可重复)
 set.seed(123) 
 V(g)$module <- as.numeric(membership(cluster_louvain(g, weights = E(g)$thickness)))
 
-# ================= 4. 映射外部生物学特征 =================
-# 清洗名称并提取物种、PC5得分
 net_names_clean <- str_remove(V(g)$name, "^X\\.?")
 tax_df <- as.data.frame(tax_table(ps_final))
 
@@ -510,43 +333,41 @@ V(g)$Label  <- V(g)$name
 
 raw_vals <- setNames(as.numeric(pca$loadings[5, ]), taxa_names(ps_final))
 matched_scores <- raw_vals[net_names_clean]
-
 if (all(is.na(matched_scores))) stop("错误：PC5 分数匹配失败！")
 
 V(g)$PC5_Score <- matched_scores
+
 V(g)$Density_Class <- case_when(
-  matched_scores > 0 ~ "High_Density",
-  matched_scores < 0 ~ "Low_Density",
+  matched_scores < 0 ~ "High_Density",  
+  matched_scores > 0 ~ "Low_Density",    
   TRUE ~ "Neutral"
 )
 
+V(g)$Density_Label <- paste0(V(g)$Density_Class, 
+                             " (PC5 loading = ", 
+                             round(V(g)$PC5_Score, 3), ")")
+
 genus_colors <- readRDS("./data/dada2/microplate/top10_genus_colors.rds")
 if (!"Other" %in% names(genus_colors)) genus_colors["Other"] <- "#DDDDDD"
-
 matched_hex <- genus_colors[V(g)$Genus]
 V(g)$color_hex <- ifelse(is.na(matched_hex), genus_colors["Other"], matched_hex)
 
-# ================= 5. 高效导出 GEXF =================
-# 提取节点和边的全属性表
 node_df <- igraph::as_data_frame(g, what = "vertices")
 edge_df <- igraph::as_data_frame(g, what = "edges")
-
-# 【优化点】剔除会在 Gephi 中造成列重复和冲突的保留字段
 nodes_meta <- node_df[, !colnames(node_df) %in% c("name", "Label", "color_hex"), drop = FALSE]
 edges_meta <- edge_df[, !colnames(edge_df) %in% c("from", "to", "thickness"), drop = FALSE]
 
 write.gexf(
-  nodes       = data.frame(id = node_df$name, label = node_df$Label), 
-  edges       = edge_df[, c("from", "to")], 
-  edgesWeight = edge_df$thickness, 
-  nodesAtt    = nodes_meta, 
-  edgesAtt    = edges_meta, 
+  nodes = data.frame(id = node_df$name, label = node_df$Label),
+  edges = edge_df[, c("from", "to")],
+  edgesWeight = edge_df$thickness,
+  nodesAtt = nodes_meta,
+  edgesAtt = edges_meta,
   nodesVizAtt = list(
-    color = cbind(t(col2rgb(node_df$color_hex)), a = 1.0), 
-    size  = rep(20, vcount(g))
+    color = cbind(t(col2rgb(node_df$color_hex)), a = 1.0),
+    size = rep(20, vcount(g))
   ),
-  output      = "network_perfect_color.gexf"
+  output = "network_perfect_color.gexf"
 )
-
-message("导出成功！请在 Gephi 中打开 'network_perfect_color.gexf'。")
 ```
+

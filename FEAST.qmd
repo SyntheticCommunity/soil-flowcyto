@@ -41,7 +41,6 @@ physeq_plate <- readRDS(xfun::magic_path("microplate/filtered/physeq.rds"))
 #### 以土壤数据作为sink
 
 ```{r}
-# 1. 构建 Sink：所有 fresh & soil 样本聚合
 sink_ps <- subset_samples(
   physeq_soil,
   storage == "fresh" & type == "soil"
@@ -57,7 +56,6 @@ agg_sink <- colSums(sink_mat)
 ### 以分选数据作为sink
 
 ```{r}
-# 1. 构建 Sink：physeq 中所有样品聚合
 sink_ps <- physeq_plate
 sink_mat <- as(otu_table(sink_ps), "matrix")
 if (taxa_are_rows(sink_ps)) sink_mat <- t(sink_mat)
@@ -81,7 +79,6 @@ agg_source <- colSums(source_mat)
 ### 以土壤数据作为Source
 
 ```{r}
-# 2. 构建 Source：所有 fresh & cell 样本聚合
 source_ps <- subset_samples(
   physeq_soil,
   storage == "fresh" & type == "soil"
@@ -97,7 +94,6 @@ agg_source <- colSums(src_mat)
 对构建好的FEAST数据集进行溯源分析，选择去噪后的结果作为最终的解释比例，运行后会直接输出结果。
 
 ```{r}
-# 3. 对 ASV 做并集补齐
 all_asvs <- union(names(agg_sink), names(agg_source))
 
 agg_sink_full   <- setNames(rep(0, length(all_asvs)), all_asvs)
@@ -106,14 +102,12 @@ agg_sink_full[names(agg_sink)] <- agg_sink
 agg_source_full   <- setNames(rep(0, length(all_asvs)), all_asvs)
 agg_source_full[names(agg_source)] <- agg_source
 
-# 4. 拼成 FEAST 要的矩阵：第1行是 Sink，第2行是 Source
 C_mat <- rbind(
   agg_sink_full,
   agg_source_full
 )
 rownames(C_mat) <- c("fresh_soil_agg", "fresh_cell_agg")
 
-# 5. 构建 metadata（Sink id=1，Source id=NA）
 md <- data.frame(
   Env        = rownames(C_mat),
   SourceSink = c("Sink", "Source"),
@@ -122,7 +116,6 @@ md <- data.frame(
   stringsAsFactors = FALSE
 )
 
-# 6. FEAST（用 C++ 接口，默认输出去噪后的 pred_em_all）
 res <- FEAST::FEAST(
   C                      = C_mat,
   metadata               = md,
@@ -131,7 +124,6 @@ res <- FEAST::FEAST(
   outfile                = "soil_from_cell"
 )
 
-# 7. 查看去噪后的最终混合比例
 clean <- res$data_prop$pred_em_all
 print(clean)
 ```

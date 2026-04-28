@@ -1,9 +1,13 @@
 # 收敛过程
 
-
 ```{r}
 library(phyloseq)
 library(tidyverse)
+library(ANCOMBC)
+```
+
+
+```{r}
 theme_set(theme_bw())
 physeq = readRDS("./data/dada2/microplate/filtered/physeq.rds")
 sample_data(physeq) = sample_data(physeq) |> 
@@ -13,6 +17,14 @@ sample_data(physeq) = sample_data(physeq) |>
 top10_genus_colors = readRDS("./data/dada2/microplate/top10_genus_colors.rds")
 ```
 
+```{r}
+rename_asv <- function(physeq, prefix="ASV"){
+  new_names <- paste0(prefix, seq_len(ntaxa(physeq)))
+  taxa_names(physeq) <- new_names
+  physeq}
+
+physeq <- rename_asv(physeq, prefix="ASV")
+```
 
 ## 主导物种间的负相关共变主导群落组装
 
@@ -40,6 +52,8 @@ df_mod = df |>
   )
 ```
 
+
+
 ```{r}
 p = df_mod |> 
   ggplot(aes(cell_num, meanAbundance, group = Genus, color = Genus)) +
@@ -58,3 +72,72 @@ p = df_mod |>
   )
 p
 ```
+### 差异分析检验
+
+```{r}
+sample_data(physeq)$cell_num <- factor(sample_data(physeq)$cell_num, levels = c("10", "50", "100", "250"))
+sample_data(physeq)$carbon <- as.factor(sample_data(physeq)$carbon)
+carbon_sources <- levels(sample_data(physeq)$carbon)
+ancom_results_list <- list()
+
+set.seed(123)
+
+for (carb in carbon_sources) {
+  ps_sub <- subset_samples(physeq, carbon == carb)
+  ps_sub <- prune_taxa(taxa_sums(ps_sub) > 0, ps_sub)
+  
+  if (nsamples(ps_sub) == 0 || length(unique(sample_data(ps_sub)$cell_num)) < 2) next
+  
+  res_sub <- ancombc2(
+    data = ps_sub, assay_name = "counts", tax_level = "Genus",            
+    fix_formula = "cell_num", p_adj_method = "fdr", prv_cut = 0.05,                
+    group = "cell_num", struc_zero = TRUE, neg_lb = TRUE, alpha = 0.05
+  )
+  
+  target_res <- res_sub$res %>%
+    dplyr::filter(str_detect(taxon, regex("Pseudomonas|Klebsiella", ignore_case = TRUE))) %>%
+    dplyr::mutate(
+      taxon = str_to_title(str_extract(taxon, regex("Pseudomonas|Klebsiella", ignore_case = TRUE))),
+      carbon = carb
+    ) %>%
+    dplyr::select(carbon, taxon, matches("^(lfc|q)_cell_num")) 
+  
+  ancom_results_list[[carb]] <- target_res
+}
+
+
+plot_df <- bind_rows(ancom_results_list) %>%
+  pivot_longer(
+    cols = matches("^(lfc|q)_cell_num"),
+    names_to = c(".value", "comp"), 
+    names_pattern = "(lfc|q)_cell_num(.*)" 
+  ) %>%
+  rename(LFC = lfc, qval = q) %>% 
+  mutate(
+    comparison = factor(paste0(comp, " vs 10"), levels = c("50 vs 10", "100 vs 10", "250 vs 10")),
+    sig_label = case_when(
+      qval < 0.001 ~ "***",
+      qval < 0.01  ~ "**",
+      qval < 0.05  ~ "*",
+      TRUE         ~ "ns"
+    )
+  )
+
+p_ancombc_facet <- ggplot(plot_df, aes(x = comparison, y = LFC, fill = taxon)) +
+  geom_bar(stat = "identity", position = position_dodge(width = 0.8), width = 0.7) +
+  scale_fill_manual(values = top10_genus_colors) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "gray50") +
+  geom_text(aes(label = sig_label, y = LFC, vjust = ifelse(LFC > 0, -0.2, 1.2)), 
+            position = position_dodge(width = 0.8), size = 4, color = "black") +
+  scale_y_continuous(expand = expansion(mult = c(0.15, 0.15))) + 
+  facet_wrap(~ carbon, nrow = 1) + 
+  labs(title = "ANCOM-BC: Density-dependent True Abundance Shift",
+       x = "Initial Cell Number Gradient", y = "Log Fold Change (LFC) relative to 10 cells") +
+  theme(aspect.ratio = 1.2, axis.text.x = element_text(angle = 45, hjust = 1),
+        strip.background = element_rect(fill = "gray95"), strip.text = element_text(face = "bold"))
+
+print(p_ancombc_facet)
+```
+
+
+
