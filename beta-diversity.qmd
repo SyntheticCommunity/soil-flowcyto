@@ -1,8 +1,6 @@
 
 # β多样性分析
 
-通过 Venn 图和 β 多样性分析，揭示了不同细胞数群落结构存在显著差异。结果表明，较低细胞数的群落能够富集更多物种，显示出更丰富的群落组成。
-
 ## 加载包
 
 ```{r}
@@ -32,11 +30,10 @@ carbon_levels <- sample_data(physeq)[["carbon"]] |> unique() |> sort()
 cell_num_levels <- sample_data(physeq)[["cell_num"]] |> unique() |> sort()
 ```
 
-## 碳源调节菌群组装
+## 不同碳源ASV
 
 ```{r}
 #| label: fig-asv-overlapping-by-carbon
-#| fig-cap: "不同碳源条件下微生物群落的ASV重叠情况"
 
 data_list = lapply(carbon_levels, function(this_carbon){
   meta = as(sample_data(physeq), "data.frame")
@@ -55,40 +52,10 @@ p
 ```
 
 
-这份韦恩图展示了在四种不同碳源（**cellobiose**、**glutamic acid**、**mannitol**、**trehalose**）处理下，微生物群落中 ASV（或物种）的分布与共有情况 [@fig-asv-overlapping-by-carbon]。
-
-由 [@fig-asv-overlapping-by-carbon] 可以观察到以下几个显著特征：
-
-### 核心共有物种 (Core Microbiome)
-
-* **中心交集数值为 50**：这表明有 50 个 ASV 在所有四种碳源条件下都能生存或被检测到。这部分物种构成了该研究环境下的“核心群落”，对多种碳源具有较强的适应性。
-
-### 各碳源的特有物种 (Unique ASVs)
-
-图中的边缘数值代表仅在该特定碳源下出现的物种，反映了碳源对群落的选择性：
-
-* **Trehalose (海藻糖)**：表现最为突出，拥有 **52 个特有 ASV**。这说明海藻糖极大地促进了某些特定类群的生长，其诱导的群落特异性最强。
-* **Glutamic acid (谷氨酸)**：只有 **1 个特有 ASV**。
-* **Mannitol (甘露醇)**：只有 **1 个特有 ASV**。
-* **Cellobiose (纤维二糖)**：为 **0**。这意味着所有能利用纤维二糖的物种，都能在其他至少一种碳源中被发现。
-
-### 两两或三者间的共有情况
-
-* **Trehalose 的独特性**：不仅特有物种多，图中右侧颜色最深的区域（Trehalose 独有部分）也暗示了它与其他碳源群落组成的显著差异。
-* **高频共有组合**：例如，Glutamic acid 和 Cellobiose 共有但排除其他的物种有 **8** 个，说明这两者在某些物种的选择压力上具有一定的相似性。
-
-### 结论分析提示
-
-这张图最核心的信息是 **Trehalose 的强选择性** 和 **整体群落的高重叠性**。
-
-
-## 初始细胞数调节菌群组装
-
-进一步对不同初始细胞数条件下的群落进行比较时发现，低初始细胞数条件下的群落中所包含的特有物种数量显著更多。这表明起始细胞数不仅影响群落的多样性水平，也显著塑造了其物种组成格局Venn显示，不同初始细胞数条件下组装的微生物群落在ASV组成上存在明显差异，且低细胞数分组中呈现出更高数量的特有ASV。这一趋势暗示，在低接种量条件下，群落组装过程可能更易受到随机性与物种优先效应的影响，从而促成了更高的物种特异性与群落异质性。
+## 不同细胞数ASV
 
 ```{r}
 #| label: fig-asv-overlapping-by-cellnum
-#| fig-cap: "不同初始细胞数目下微生物群落的ASV重叠情况"
 
 data_list = lapply(cell_num_levels, function(this){
   meta = as(sample_data(physeq), "data.frame")
@@ -109,47 +76,11 @@ p
 
 ```
 
-这幅韦恩图（Venn Diagram）从**初始细胞数量（起始浓度）**维度展示了微生物群落中 ASV（或物种）的组成与重叠情况。
-
-以下是对 [@fig-asv-overlapping-by-cellnum]（初始细胞数 10, 50, 100, 250）的详细解释：
-
-### 核心共有物种 (Core Community)
-
-* **中心交集为 54**：这说明有 54 个 ASV 是“常驻嘉宾”，无论初始细胞数量是极低的 10 还是极高的 250，这些物种都能成功定殖并被检测到。这反映了群落中存在一批竞争力极强或环境适应性极广的核心物种。
-
-### 接种量（初始细胞数）的影响
-
-图中的数字分布揭示了接种密度如何影响群落的最终构成：
-
-* **低浓度特有 (10 vs 50)**：
-  * **62 个 ASV** 仅在 10 和 50 这两个较低浓度的交集中出现，而没有出现在高浓度（100, 250）中。这可能暗示某些物种在高密度竞争中会被“排挤”掉（竞争排斥），但在低密度下有生存空间。
-
-
-* **高浓度特有 (250)**：
-  * **250 组的特有 ASV 仅为 1**。这意味着增加初始细胞数量并不能显著带来更多的特有物种；绝大多数能在高浓度生存的物种，在低浓度下其实也存在。
-
-
-* **稀疏性 (10 组)**：
-  * **10 组有 3 个特有 ASV**。这通常被解释为“随机效应”或“优先效应”，即在极低浓度下，某些稀有物种由于随机采样被捕获并偶然生长起来。
-
-### 数据重叠特征
-
-* **高度一致性**：大部分区域的数值为 **0** 或非常小（如 1 或 2），这说明群落结构在不同初始浓度下具有很高的相似性。
-* **主要差异点**：最大的差异在于 **10 和 50 共有但高浓度缺失的 62 个物种**。这表明从 50 到 100 的浓度跨度可能是群落发生剧烈竞争过滤的转折点。
-
 
 ## 综合考虑碳源和初始细胞数
 
-由 [@fig-asv-overlapping-by-carbon; @fig-asv-overlapping-by-cellnum] 可见：
-
-1. **碳源是主要驱动力**：[@fig-asv-overlapping-by-carbon] 显示 **Trehalose (52)** 拥有最多的特有 ASV，说明化学环境（食物来源）对物种的选择压力非常大。
-2. **初始浓度影响多样性分布**： [@fig-asv-overlapping-by-cellnum] 显示，较低的初始浓度（10 和 50）反而保留了更多在稠密群落中不可见的物种（那 62 个 ASV）。
-
-同时考虑两个因素，可得 [@fig-asv-overlapping-by-carbon-and-cellnum]。尽管没有那么直观，但是尚可保持上述 2 个结论。
-
 ```{r}
 #| label: fig-asv-overlapping-by-carbon-and-cellnum
-#| fig-cap: "不同碳源 + 初始细胞数目下微生物群落的ASV重叠情况"
 
 plots = lapply(carbon_levels, function(this_carbon){
   data_list = lapply(cell_num_levels, function(this_cell_num){
@@ -198,20 +129,7 @@ print(p)
 ```
 
 
-
-
 ##  不同初始细胞数分组之间微生物群落结构存在显著差异
-
-通过计算 Bray-Curtis 距离矩阵，并结合主坐标分析 PCoA 进行实现，分析结果表明，初始细胞数对群落结构具有显著影响，不同接种量条件下的样本在坐标空间中呈现出清晰分离，说明其群落组成存在明显差异。
-在微生物组研究中，**PERMANOVA**（置信度多元方差分析）是验证 PCoA 图中观测到的分组差异是否具有统计学显著性的“金标准”。在 R 中，最常用的实现工具是 `vegan` 包中的 `adonis2` 函数。
-
-PERMANOVA 的显著结果可能由两个原因引起：
-1. 各组的**中心位置（Centroid）**不同（这通常是我们想要的结论）。
-2. 各组的**离散程度（Dispersion/Variance）**不同。
-
-### 结果可视化
-
-为评估不同初始细胞数对群落结构稳定性的影响，针对每一种碳源，分别提取微生物群落丰度矩阵并计算 Bray-Curtis 距离。随后使用主坐标分析（PCoA）和PERMANOVA检验各组间群落结构的显著性差异。同时，利用betadisper方法计算每个样本到其所在组中心的距离，以衡量群内结构离散度，并通过箱线图展示不同初始细胞数分组的离散度变化趋势。组间差异通过pairwisePERMANOVA进行两两比较，并采用FDR方法进行多重假设检验校正，显著性结果以字母标注形式显示。
 
 ### 群落β多样性绘制函数
 
@@ -247,11 +165,10 @@ plot_pcoa_res = function(physeq, group_var = "cell_num", shape_var = "carbon"){
 }
 ```
 
-### 不同碳细胞数群落多样性
+### 比较细胞数
 
 ```{r}
 #| label: fig-pcoa-by-carbon-and-cellnum
-#| fig-cap: "不同碳源条件下，初始细胞数对微生物群落结构的影响"
 
 plots = list()
 for (this_carbon in carbon_levels){
@@ -273,11 +190,11 @@ p = plot_grid(plot_grid(plotlist = plots, labels = "auto"), legend, ncol = 2, re
 p
 ```
 
-### 不同碳源群落表型群落多样性
+### 比较表型
 
 ```{r}
 #| label: fig-pcoa-by-carbon-and-class
-#| fig-cap: "不同碳源条件下，群落生长、生物膜表型对微生物群落结构的影响"
+
 plots = list()
 for (this_carbon in carbon_levels){
   ps_sub = subset_samples(physeq, carbon == this_carbon)
@@ -296,3 +213,36 @@ p = plot_grid(plot_grid(plotlist = plots, labels = "auto"), legend, ncol = 2, re
 
 p
 ```
+
+### 比较碳源
+
+```{r}
+#| label: fig-pcoa-carbon-within-cellnum
+
+cell_num_levels <- sort(unique(
+  as.numeric(as.character(sample_data(physeq)$cell_num))
+))
+plots <- list()
+for (this_cell_num in cell_num_levels) {
+  ps_sub <- subset_samples(
+    physeq,
+    as.numeric(as.character(cell_num)) == this_cell_num)
+  
+  ps_final <- prune_taxa(taxa_sums(ps_sub) > 0, ps_sub)
+  p <- plot_pcoa_res(ps_final,group_var = "carbon",shape_var = NULL) +
+    scale_color_manual(values = my_saved_colors$carbon) +
+    scale_y_continuous(expand = expansion(mult = 0.3)) +
+    labs(color = "carbon",subtitle = paste0("cell num: ", this_cell_num)) +
+    theme(legend.position = "none",aspect.ratio = 1)
+  plots[[as.character(this_cell_num)]] <- p
+}
+
+legend <- get_legend(plots[[1]] +theme(legend.position = "right"))
+
+p <- plot_grid(plot_grid(plotlist = plots, labels = "auto"),legend,ncol = 2,rel_widths = c(3, 0.4))
+
+p
+
+```
+
+

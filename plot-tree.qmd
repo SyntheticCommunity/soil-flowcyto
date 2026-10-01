@@ -1,9 +1,7 @@
-# Tree Plot
 
-- Prevelance: 出现次数小于 1% 的 ASV 要不要剔除？
-- Klebsiella 属只鉴定出了 2 个 ASV（它的 Prevelance 很高），怎么理解？
+# 进化树
 
-## Read Phyloseq Object
+## 读取数据
 
 ```{r}
 library(phyloseq)
@@ -13,7 +11,7 @@ library(tidytree)
 library(aplot)
 ```
 
-## Plot Tree
+## 加载数据
 
 ```{r}
 theme_set(theme_bw())
@@ -45,10 +43,6 @@ ggtree(tree, layout = "rectangular") %<+% tax +
 
 ### 分组树
 
-在 ggtree 中，要让**共同的内部分支（Internal branches）**也带上颜色，核心在于将分类信息（如 Phylum）从叶子节点（Tips）向上推导至它们的共同最近共同祖先（MRCA）。
-
-使用 `groupOTU()` 函数，会递归地将分支信息应用到整个进化支上。
-
 ```{r}
 group_list = split(tax$label, tax$Phylum)
 tree_grouped = groupOTU(tree, group_list)
@@ -60,7 +54,6 @@ tree_plot = ggtree(tree_grouped, branch.length = "none", aes(color = group)) +
 
 tree_plot
 ```
-
 
 ### Phylum 颜色块
 
@@ -108,6 +101,7 @@ abundance_plot
 my_saved_colors <- readRDS("./data/dada2/microplate/top10_genus_colors.rds")
 ```
 
+## 绘图
 
 ```{r}
 genus_keep = abundance_df |> 

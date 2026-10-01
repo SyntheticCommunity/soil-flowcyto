@@ -1,9 +1,6 @@
 
 # FEAST溯源
 
-此部分代码对补充的土壤样品数据进行溯源，以次来解释分选样品与土壤之间的关系。
-
-
 ## 加载需要的包
 
 ```{r}
@@ -13,30 +10,16 @@ library(ape)
 library(FEAST)
 ```
 
-
 ## 读取数据
-
-补充数据，过滤标准绝对丰度50，频率不小于2。
 
 ```{r}
 physeq_soil <- readRDS(xfun::magic_path("soil/filtered/physeq.rds"))
-```
-
-
-分选数据，这里直接读取过滤好的分选数据集。
-
-```{r}
 physeq_plate <- readRDS(xfun::magic_path("microplate/filtered/physeq.rds"))
 ```
 
-
 ## 选择不同处理和来源的群落进行溯源追踪
 
-这里我们对分选群落，土壤原始测序群落，土壤细胞群落之间溯源追踪。
-
-## 汇（Sink）
-
-目标群落，你想要知道它里边的微生物来自哪些“来源”。
+### 汇（Sink）
 
 #### 以土壤数据作为sink
 
@@ -62,10 +45,7 @@ if (taxa_are_rows(sink_ps)) sink_mat <- t(sink_mat)
 agg_sink <- colSums(sink_mat)
 ```
 
-
 ## 来源（Source）
-
-一组潜在的供给群落，用来解释另一个群落中物种的组成。
 
 ### 以分选数据作为Source
 
@@ -88,10 +68,7 @@ if (taxa_are_rows(source_ps)) src_mat <- t(src_mat)
 agg_source <- colSums(src_mat)
 ```
 
-
 ## FEAST分析
-
-对构建好的FEAST数据集进行溯源分析，选择去噪后的结果作为最终的解释比例，运行后会直接输出结果。
 
 ```{r}
 all_asvs <- union(names(agg_sink), names(agg_source))

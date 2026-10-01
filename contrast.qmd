@@ -1,14 +1,7 @@
 
 #  不同类型样品之间的差异
 
-此部分将分选样品结合土壤和细胞的测序结果结合分析不同处理之间存在的差异。
-
-
-## Venn图分析
-
-通过Venn图来展示不同来源样品之间的ASV序列的存在情况。
-
-### 加载需要的包
+## 加载需要的包
 
 ```{r}
 library(phyloseq)
@@ -27,9 +20,7 @@ physeq <- readRDS("./data/dada2/microplate/filtered/physeq.rds")
 physeq_filtered <- readRDS("./data/dada2/soil/filtered/physeq.rds") 
 ```
 
-### 多样性分析
-
-分析结果与预期一致土壤多样性＞细胞＞分选，选择Shannno指标作为评判标准，同时考虑物种的存在与丰度。
+### α多样性分析
 
 ```{r}
 alpha_physeq <- estimate_richness(physeq, measures = c("Shannon", "Simpson", "Chao1")) %>%
@@ -73,13 +64,11 @@ pos_df <- fresh_df %>%
 
 p2 <- ggplot(fresh_df, aes(x = type, y = Shannon, fill = Group)) +
   geom_boxplot(position = position_dodge(width = 0.75)) +
-  # 【修改点2】：同步调整 X 轴的 breaks 和 labels 顺序
   scale_x_discrete(
     name   = "",
     breaks = c("soil", "cell", "All"),
     labels = c("soil", "cell", "flowcyto")
   ) +
-  # 【修改点3】：同步调整图例 (Legend) 的排列顺序，让图例和 X 轴保持一致的视觉顺序
   scale_fill_manual(
     name   = "Group",
     breaks = c("fresh_soil", "fresh_cell", "physeq"),
@@ -107,3 +96,121 @@ p2 <- ggplot(fresh_df, aes(x = type, y = Shannon, fill = Group)) +
 print(p2)
 ```
 
+### 群落结构
+
+```{r}
+top10_genus_colors <- readRDS(
+  "./data/dada2/microplate/top10_genus_colors.rds"
+)
+
+get_genus_data <- function(ps, group = NULL) {
+  ps <- prune_samples(sample_sums(ps) > 0, ps)
+  ps <- transform_sample_counts(ps, function(x) x / sum(x))
+  df <- psmelt(ps)
+  df %>%
+    transmute(Sample = as.character(Sample),Group = if (is.null(group)) as.character(type) else group,
+      Genus = if_else(
+        is.na(Genus) | Genus == "","Unclassified",as.character(Genus)
+      ),
+      Relative_Abundance = Abundance
+    )
+}
+
+genus_long <- bind_rows(
+  get_genus_data(
+    subset_samples(
+      physeq_filtered,
+      storage == "fresh" & type %in% c("soil", "cell")
+    )
+  ),
+  get_genus_data(physeq, group = "flowcyto")
+) %>%
+  mutate(Group = factor(Group,levels = c("soil", "cell", "flowcyto")
+    )
+  )
+
+genus_group <- genus_long %>%
+  group_by(Group) %>%
+  mutate(n_samples = n_distinct(Sample)) %>%
+  group_by(Group, Genus) %>%
+  summarise(
+    Relative_Abundance =
+      sum(Relative_Abundance, na.rm = TRUE) /
+      dplyr::first(n_samples),
+    .groups = "drop"
+  )
+
+top10_genus <- genus_group %>%
+  filter(Genus != "Unclassified") %>%
+  group_by(Genus) %>%
+  summarise(total_abundance = sum(Relative_Abundance),.groups = "drop"
+  ) %>%
+  slice_max(total_abundance,n = 7,with_ties = FALSE
+  ) %>%
+  pull(Genus)
+plot_df <- genus_group %>%
+  mutate(
+    Genus = if_else(Genus %in% top10_genus, Genus, "Other")
+  ) %>%
+  group_by(Group, Genus) %>%
+  summarise(
+    Relative_Abundance = sum(Relative_Abundance),
+    .groups = "drop"
+  ) %>%
+  mutate(
+    Genus = factor(Genus, levels = c(top10_genus, "Other"))
+  )
+
+missing_genus <- setdiff(
+  top10_genus,
+  names(top10_genus_colors)
+)
+
+plot_colors <- top10_genus_colors
+
+if (length(missing_genus) > 0) {
+  plot_colors <- c(
+    plot_colors,
+    setNames(
+      scales::hue_pal()(length(missing_genus)),
+      missing_genus
+    )
+  )
+}
+
+if (!"Other" %in% names(plot_colors)) {
+  plot_colors <- c(plot_colors, Other = "#BDBDBD")
+}
+
+plot_colors <- plot_colors[c(top10_genus, "Other")]
+
+p_composition <- ggplot(
+  plot_df,
+  aes(
+    x = Group,
+    y = Relative_Abundance,
+    fill = Genus
+  )
+) +
+  geom_bar(
+    stat = "identity",
+    position = position_fill(reverse = FALSE)
+  ) +
+  scale_y_continuous(
+    labels = scales::label_percent(),
+    expand = c(0, 0)
+  ) +
+  scale_fill_manual(
+    values = plot_colors,
+    name = "Genus",
+    guide = guide_legend(reverse = FALSE)
+  ) +
+  labs(x = NULL,y = "Relative Abundance" ) +
+  theme(
+    legend.position = "right",
+    axis.text.x = element_text(size = 10),
+    aspect.ratio = 1.2
+  )
+
+p_composition
+```

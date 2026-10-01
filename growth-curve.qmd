@@ -1,0 +1,136 @@
+
+# 生长曲线
+
+```{r}
+library(mclust)
+library(tidyverse)
+
+target_carbons <- c("cellobiose", "glutamic acid", "mannitol", "trehalose")
+phase_levels <- c("initial", "post_transfer")
+type_levels <- paste0("Type ", 1:6)
+phase_labels <- c(initial = "Initial community",
+                  post_transfer = "Post-transfer community")
+cluster_colors <- setNames(
+  c("#3C5488", "#4DBBD5", "#00A087", "#EFC000", "#F39B7F", "#E64B35"),
+  type_levels
+)
+
+growth_data <- read_csv("data/20240717_all_data.csv", show_col_types = FALSE) %>%
+  dplyr::filter(
+    method == "flowcyto", measure == "growth",
+    carbon %in% target_carbons, time %in% 1:16
+  ) %>%
+  dplyr::mutate(
+    sample_id = str_c(carbon, cell_num, plate, well_position, sep = "__"),
+    phase = factor(if_else(time <= 8, "initial", "post_transfer"),
+                   levels = phase_levels),
+    day = if_else(time <= 8, time - 1, time - 9)
+  ) %>%
+  dplyr::arrange(phase, sample_id, day)
+
+cluster_phase <- function(ph) {
+  dat <- growth_data %>% dplyr::filter(phase == ph)
+
+  wide <- dat %>%
+    dplyr::select(sample_id, day, value) %>%
+    tidyr::pivot_wider(names_from = day, values_from = value,
+                       names_prefix = "day_") %>%
+    dplyr::arrange(sample_id)
+
+  x <- wide %>% dplyr::select(starts_with("day_")) %>% as.matrix()
+  pca <- prcomp(x, center = TRUE, scale. = TRUE)
+  cum_var <- cumsum(pca$sdev^2 / sum(pca$sdev^2))
+  n_pc <- min(max(2, which(cum_var >= 0.95)[1]), 5, ncol(pca$x))
+
+  fit <- mclust::Mclust(
+    pca$x[, seq_len(n_pc), drop = FALSE], G = 6,
+    modelNames = c("EII", "VII", "EEI", "VEI", "EVI", "VVI"),
+    verbose = FALSE
+  )
+
+  assignments <- tibble(
+    sample_id = wide$sample_id,
+    old_cluster = fit$classification
+  )
+
+  type_order <- dat %>%
+    dplyr::inner_join(assignments, by = "sample_id") %>%
+    dplyr::group_by(old_cluster) %>%
+    dplyr::summarise(mean_od = mean(value, na.rm = TRUE),
+                     .groups = "drop") %>%
+    dplyr::arrange(mean_od) %>%
+    dplyr::mutate(curve_type = paste0("Type ", row_number()))
+
+  assignments %>%
+    dplyr::left_join(type_order, by = "old_cluster") %>%
+    dplyr::transmute(
+      phase = factor(ph, levels = phase_levels),
+      sample_id,
+      curve_type = factor(curve_type, levels = type_levels)
+    )
+}
+
+cluster_assignments <- purrr::map_dfr(phase_levels, cluster_phase)
+
+cluster_counts <- cluster_assignments %>%
+  dplyr::count(phase, curve_type, name = "n") %>%
+  dplyr::group_by(phase) %>%
+  dplyr::mutate(proportion = n / sum(n)) %>%
+  dplyr::ungroup()
+
+facet_info <- cluster_counts %>%
+  dplyr::mutate(
+    facet_label = paste0(
+      phase_labels[as.character(phase)], "\n",
+      str_replace(as.character(curve_type), "Type", "Cluster"), "  ",
+      scales::percent(proportion, accuracy = 0.1), "  (n = ", n, ")"
+    )
+  ) %>%
+  dplyr::arrange(phase, curve_type)
+
+plot_data <- growth_data %>%
+  dplyr::left_join(cluster_assignments,
+                   by = c("phase", "sample_id")) %>%
+  dplyr::left_join(
+    facet_info %>% dplyr::select(phase, curve_type, facet_label),
+    by = c("phase", "curve_type")
+  ) %>%
+  dplyr::mutate(
+    facet_label = factor(facet_label, levels = facet_info$facet_label)
+  )
+
+mean_data <- plot_data %>%
+  dplyr::group_by(phase, curve_type, facet_label, day) %>%
+  dplyr::summarise(mean_value = mean(value, na.rm = TRUE),
+                   .groups = "drop")
+
+p <- ggplot(plot_data, aes(day, value, group = sample_id)) +
+  geom_line(color = "grey55", alpha = 0.04, linewidth = 0.25) +
+  geom_line(
+    data = mean_data,
+    aes(day, mean_value, color = curve_type, group = curve_type),
+    inherit.aes = FALSE, linewidth = 1.5
+  ) +
+  facet_wrap(~facet_label, nrow = 4, ncol = 3, dir = "h") +
+  scale_color_manual(values = cluster_colors) +
+  scale_x_continuous(breaks = 0:7,
+                     expand = expansion(mult = 0.02)) +
+  labs(
+    title = "Growth Curve Clusters Before and After Transfer",
+    x = "Day",
+    y = "Biomass (OD600)"
+  ) +
+  theme_bw(base_size = 13) +
+  theme(
+    axis.text = element_text(size = 12, color = "black"),
+    axis.title = element_text(size = 14),
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5),
+    strip.text = element_text(size = 12, face = "bold"),
+    strip.background = element_rect(fill = "grey95"),
+    panel.grid.minor = element_blank(),
+    legend.position = "none"
+  )
+
+p
+```
+

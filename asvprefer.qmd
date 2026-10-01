@@ -14,6 +14,11 @@ library(ggrepel)
 library(tidyr)
 library(ggplot2)
 library(forcats)
+library(Biostrings)
+library(DECIPHER)
+library(phangorn)
+library(ape)
+library(ggtree)
 ```
 
 
@@ -33,10 +38,7 @@ rename_asv <- function(physeq, prefix="ASV"){
 physeq <- rename_asv(physeq, prefix="ASV")
 ```
 
-
 ### 数据集清洗
-
-保险起见去丰度为0的ASV避免影响后续的网络构建以及分析。
 
 ```{r}
 ps_final <- prune_taxa(taxa_sums(physeq) > 0, physeq)
@@ -76,10 +78,18 @@ final_results_with_tax <- left_join(final_classification, tax_df, by = "ASV_ID")
 print(table(final_results_with_tax$Density_Preference))
 top_high <- final_results_with_tax %>% filter(Density_Preference == "High_Density_Enriched") %>% head(10)
 top_low <- final_results_with_tax %>% filter(Density_Preference == "Low_Density_Enriched") %>% head(10)
-print(top_high %>% select(ASV_ID, Rho, Pval, Genus))
-print(top_low %>% select(ASV_ID, Rho, Pval, Genus))
 
+top_high <- final_results_with_tax %>%
+  filter(Density_Preference == "High_Density_Enriched")
+top_low <- final_results_with_tax %>%
+  filter(Density_Preference == "Low_Density_Enriched")
+#write.csv(top_high,"High_Density.csv",row.names = FALSE)
+#write.csv(top_low,"Low_Density.csv",row.names = FALSE)
+
+print(top_high)
+print(top_low)
 ```
+
 
 ### 偏好相关性可视化
 
@@ -229,4 +239,132 @@ p_combined <- ggplot(plot_data_agg, aes(x = as.factor(cell_num),
 
 print(p_combined)
 ```
+
+
+```{r}
+
+plot_genus_tree <- function(ps, genus) {
+
+  tree <- phyloseq::phy_tree(ps)
+
+  info <- final_results_with_tax |>
+    dplyr::filter(
+      !is.na(Genus),
+      as.character(Genus) == genus
+    ) |>
+    dplyr::distinct(
+      ASV_ID,
+      .keep_all = TRUE
+    ) |>
+    dplyr::transmute(
+      label = as.character(ASV_ID),
+      Density_Preference = factor(
+        tidyr::replace_na(
+          Density_Preference,
+          "Not_Significant"
+        ),
+        levels = c(
+          "High_Density_Enriched",
+          "Low_Density_Enriched",
+          "Not_Significant"
+        )
+      )
+    )
+
+  tips <- base::intersect(
+    info$label,
+    tree$tip.label
+  )
+
+  genus_tree <- ape::keep.tip(
+    tree,
+    tips
+  ) |>
+    ape::ladderize(right = T)
+
+  p <- ggtree::ggtree(
+    genus_tree,
+    layout = "rectangular",
+    ladderize = F
+  )
+
+  p$data <- dplyr::left_join(
+    p$data,
+    info,
+    by = "label"
+  )
+
+  point_shape <- c(
+    Pseudomonas = 21,
+    Klebsiella = 24
+  )[[genus]]
+
+  label_offset <- max(
+    p$data$x,
+    na.rm = TRUE
+  ) * 0.02
+
+  p +
+    ggtree::geom_tippoint(
+      aes(fill = Density_Preference),
+      shape = point_shape,
+      size = 3.5,
+      color = "black",
+      stroke = 0.3
+    ) +
+    ggtree::geom_tiplab(
+      offset = label_offset,
+      size = 3
+    ) +
+    scale_fill_manual(
+      values = c(
+        High_Density_Enriched = "#E64B35",
+        Low_Density_Enriched = "#4DBBD5",
+        Not_Significant = "#CCCCCC"
+      ),
+      labels = c(
+        "High-density enriched",
+        "Low-density enriched",
+        "Not significant"
+      ),
+      drop = FALSE
+    ) +
+    scale_x_continuous(
+      expand = expansion(
+        mult = c(0.02, 0.25)
+      )
+    ) +
+    coord_cartesian(clip = "off") +
+    labs(
+      title = paste0(
+        genus,
+        " ASV phylogenetic tree"
+      ),
+      x = "Genetic distance",
+      y = NULL,
+      fill = "Density Preference"
+    ) +
+    theme_classic() +
+    theme(
+      axis.text.y = element_blank(),
+      axis.ticks.y = element_blank(),
+      axis.line.y = element_blank(),
+      plot.title = element_text(
+        face = "bold",
+        hjust = 0.5
+      ),
+      legend.position = "right",
+      plot.margin = margin(
+        10, 90, 10, 10
+      )
+    )
+}
+
+p_pseudomonas <- plot_genus_tree(ps_final,"Pseudomonas")
+
+print(p_pseudomonas)
+```
+
+
+
 

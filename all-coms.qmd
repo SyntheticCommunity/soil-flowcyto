@@ -1,12 +1,7 @@
 
-# α多样性分析
-
-α多样性分析显示，群落多样性随着细胞数量的增加而显著提升；然而，单一多样性指标与生物膜形成量之间未表现出显著相关性。
-
-- [ ] 细胞数少的时候，会不会有更多的稀有 ASV？会不会有不同的物种被筛选出来？
+# 群落结构
 
 ## 加载需要的包
-
 
 ```{r, message=FALSE}
 library(phyloseq)
@@ -35,13 +30,11 @@ top10_genus_colors <- readRDS(file = "./data/dada2/microplate/top10_genus_colors
 my_colors <- readRDS("./data/dada2/microplate/factor_colors.rds")
 ```
 
-## 初始细胞数促进多样性增加但不增强生物膜形成能力
+## 初始细胞数促群落结构
 
-尽管随着初始细胞数的增加，群落的α多样性显著提升，但这并未对应地带来生物膜形成能力的增强。这一结果提示，群落的功能输出并非仅由物种丰富度驱动，而可能更依赖于特定功能菌的存在及其相互关系，强调了‘功能性多样性’相对于‘计数性多样性’在生态过程中的重要性。
 
-### 初始细胞数驱动群落结构分化
+### 计算
 
-在碳源条件保持一致的背景下，我们观察到不同初始细胞数显著影响了微生物群落的结构特征。低细胞数的群落呈现出与高细胞数明显不同的组成模式，表明即便资源环境一致，群落的组装路径依然存在差异。这种差异可能源于以下几个机制:（1）优先效应，即在低密度群落中，早期定殖者对群落结构具有更强的影响力，因其所受生物竞争较少，能迅速扩张并塑造局部环境；（2）随机漂变：在细胞数较低的情况下更易发生，从而造成较大的群落组成变异；（3）物种间相互作用的强度差异，低细胞数下可能促使部分关键物种发挥更大的生态功能，主导群落结构。
 
 ```{r}
 theme_set(theme_bw())
@@ -58,7 +51,7 @@ top10_genus_all <- df_all %>%
 
 ```
 
-### 不同碳源的群落结构
+### 不同碳源
 
 ```{r}
 df_summary <- df_all %>% 
@@ -96,7 +89,7 @@ p
 
 ```
 
-### 不同处理下的群落结构
+### 不同处理
 
 
 ```{r}
@@ -121,7 +114,7 @@ p = ggplot(df_mod, aes(Sample, Abundance, fill = Genus)) +
            position = position_fill(reverse = TRUE),
            width = 1) +
   scale_fill_manual(values = top10_genus_colors) +
-  scale_y_continuous(labels = scales::label_percent()) +
+  scale_y_continuous(name = "Relative Abundance",labels = scales::label_percent()) +
   facet_wrap(~ carbon + cell_num, scales = "free_x") +
   theme(
         axis.ticks.x = element_blank(),
@@ -131,7 +124,7 @@ p = ggplot(df_mod, aes(Sample, Abundance, fill = Genus)) +
 p
 ```
 
-### 群落结构以及分组信息
+### 整体群落结构
 
 
 ```{r}

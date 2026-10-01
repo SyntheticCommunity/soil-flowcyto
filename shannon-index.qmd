@@ -1,17 +1,15 @@
+
 # 香农指数
 
-## 分析内容
-
-- [] 分析微生物群落的 α 多样性，探讨其与碳源、初始细胞数、生长和生物膜形成能力之间的关系。
-- [] 使用 Kruskal-Wallis 检验和 Dunn 事后检验评估不同初始细胞数和生物膜分组之间的多样性差异。
-
-### 加载包
+## 加载包
 
 ```{r}
 library(phyloseq)
 library(tidyverse)
 library(export)
 library(ggpubr)
+library(rstatix)
+library(multcompView)
 theme_set(theme_bw())
 ```
 
@@ -39,6 +37,8 @@ ps_rare <- rarefy_even_depth(physeq,
 ps_rare
 ```
 
+### 多样性指标计算
+
 ```{r}
 plot_richness(ps_rare, x = "cell_num", measures = c("Observed", "Shannon", "Chao1", "Simpson")) +
   geom_boxplot() +
@@ -56,20 +56,11 @@ plot_richness(ps_rare, x = "class", measures = c("Observed", "Shannon", "Chao1",
   theme(axis.text.x = element_text(angle = 30, hjust = 1))
 ```
 
-
-
 ## 构建多样性分析数据集
-
-相较于 Shannon 和 Simpson 指数，Chao1 更注重对稀有物种的估计，因此在本研究中对细胞数变化的响应不如 Shannon 指数敏感。考虑到群落组成主要表现为主导种间的丰度变化，Shannon 指数更适合作为群落 α 多样性的表征指标）。
 
 ### 初始细胞数驱动多样性增加
 
-我们观察到，随着初始接种细胞数的增加，群落的α多样性显著提升高。这一趋势表明，初始细胞数作为群落组装的关键生态因子，在低细胞数条件下，群落更容易受到随机扩增、优先效应以及瓶颈效应的影响，导致少数优势菌迅速占据生态位，从而降低群落的整体多样性。而在高接种量条件下，更多的物种能够同时进入系统并建立稳定种群，从而形成更加复杂和均匀的群落结构。
-
 ### 多样性提升未显著增强群落生物膜形成能力
-
-尽管随着初始细胞数的增加，群落的α多样性（如Shannon指数）呈显著上升趋势，但生物膜形成能力并未同步增强，二者之间并不呈正相关关系。这一结果表明，群落的结构复杂性并不直接决定其功能表达，生物膜形成可能更多受到特定功能菌或其互作关系的影响。多样性的提升可能引入了功能冗余或中性种群，反而稀释了关键菌的生态位优势。此外，在多样性较高的群落中，种间竞争可能更为激烈，抑制了某些主导物种的生物膜形成能力。因此，微生物群落功能的表达并非仅取决于物种丰富度，可能而更依赖于关键功能成员的存在以及相互作用。
-
 
 ```{r}
 shannon_index = estimate_richness(ps_rare, measures = c("Shannon")) |> 
@@ -94,6 +85,97 @@ final_plot =cowplot::plot_grid(plotlist = plots, nrow = 1, labels = "auto", alig
 
 print(final_plot)
 ```
+```{r}
+shannon_index <- estimate_richness(ps_rare, measures = "Shannon") %>%
+  rownames_to_column("sampleID") %>%
+  left_join(
+    data.frame(sample_data(ps_rare)) %>%
+      mutate(sampleID = as.character(sampleID)),
+    by = "sampleID"
+  ) %>%
+  mutate(
+    cell_num = as_factor(cell_num),
+    carbon = factor(carbon),
+    growth = str_sub(class, 1, 2),
+    biofilm = str_sub(class, 3, 4)
+  ) %>%
+  as_tibble()
+
+plot_shannon <- function(x) {
+  dat <- shannon_index %>% filter(!is.na(.data[[x]]), !is.na(Shannon))
+  form <- reformulate(x, response = "Shannon")
+
+  dunn <- rstatix::dunn_test(
+    dat, formula = form,
+    p.adjust.method = "bonferroni"
+  )
+
+  p_values <- dunn$p.adj
+  names(p_values) <- paste(dunn$group1, dunn$group2, sep = "-")
+
+  letters <- multcompView::multcompLetters(
+    p_values,
+    threshold = 0.05
+  )$Letters
+
+  y_range <- diff(range(dat$Shannon, na.rm = TRUE))
+  if (y_range == 0) y_range <- 1
+
+  letter_data <- dat %>%
+    mutate(level = as.character(.data[[x]])) %>%
+    group_by(level) %>%
+    summarise(
+      y = boxplot.stats(Shannon)$stats[5] + 0.08 * y_range,
+      .groups = "drop"
+    ) %>%
+    mutate(letter = letters[level])
+
+  p_y <- max(letter_data$y, na.rm = TRUE) + 0.12 * y_range
+
+  ggplot(dat, aes(.data[[x]], Shannon)) +
+    geom_boxplot(outlier.shape = NA) +
+    geom_text(
+      data = letter_data,
+      aes(level, y, label = letter),
+      inherit.aes = FALSE,
+      size = 5,
+      fontface = "bold"
+    ) +
+    stat_compare_means(
+      method = "kruskal.test",
+      label = "p.format",
+      label.y = p_y
+    ) +
+    scale_y_continuous(
+      expand = expansion(mult = c(0.05, 0.18))
+    ) +
+    labs(x = NULL, y = "Shannon Index") +
+    theme(
+      axis.text.x = element_text(
+        angle = 30,
+        hjust = 1,
+        size = 10
+      ),
+      aspect.ratio = 1.2
+    )
+}
+
+plots <- lapply(
+  c("carbon", "cell_num", "class"),
+  plot_shannon
+)
+
+final_plot <- cowplot::plot_grid(
+  plotlist = plots,
+  nrow = 1,
+  labels = "auto",
+  align = "hv"
+)
+
+print(final_plot)
+```
+
+### Chao1和观测值
 
 ```{r}
 richness_df = estimate_richness(ps_rare, measures = c("Chao1", "Observed")) |> 
@@ -130,5 +212,80 @@ final_plot = cowplot::plot_grid(plotlist = c(plots_chao1, plots_obs), nrow = 2, 
 
 print(final_plot)
 ```
+
+### 均匀度
+
+```{r}
+richness_df <- estimate_richness(
+  ps_rare,
+  measures = c("Chao1", "Observed", "Shannon")
+) %>%
+  mutate(sampleID = sample_names(ps_rare)) %>%
+  left_join(
+    data.frame(sample_data(ps_rare)) %>%
+      mutate(sampleID = as.character(sampleID)),
+    by = "sampleID"
+  ) %>%
+  mutate(
+    cell_num = as_factor(cell_num),
+    carbon = factor(carbon),
+    growth = str_sub(class, 1, 2),
+    biofilm = str_sub(class, 3, 4),
+    Evenness = if_else(
+      Observed > 1,
+      Shannon / log(Observed),
+      NA_real_
+    )
+  ) %>%
+  as_tibble()
+
+group_vars <- c("carbon", "cell_num", "class")
+
+plot_alpha <- function(metric, y_label) {
+  lapply(group_vars, function(x) {
+    ggplot(richness_df, aes(.data[[x]], .data[[metric]])) +
+      geom_boxplot(outlier.shape = NA) +
+      geom_jitter(
+        data = function(d) slice_sample(d, prop = 0.2),
+        alpha = 0.5,
+        size = 1.2,
+        color = "gray30"
+      ) +
+      stat_compare_means(
+        method = "kruskal.test",
+        label = "p.format"
+      ) +
+      scale_y_continuous(
+        expand = expansion(mult = c(0.05, 0.15))
+      ) +
+      labs(x = NULL, y = y_label) +
+      theme(
+        axis.text.x = element_text(
+          angle = 30,
+          hjust = 1,
+          size = 10
+        ),
+        aspect.ratio = 1.2
+      )
+  })
+}
+
+plots_evenness <- plot_alpha("Evenness", "Pielou's Evenness")
+
+final_plot <- cowplot::plot_grid(
+  plotlist = c(
+    plots_evenness
+  ),
+  nrow = 3,
+  ncol = 3,
+  labels = "auto",
+  align = "hv"
+)
+
+print(final_plot)
+
+export::graph2ppt(final_plot,  width=7, height=7.5,file = "evenness_index.ppt")
+```
+
 
 

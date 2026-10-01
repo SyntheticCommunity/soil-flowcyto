@@ -1,4 +1,5 @@
-# 收敛过程
+
+# 群落简化
 
 ```{r}
 library(phyloseq)
@@ -6,6 +7,7 @@ library(tidyverse)
 library(ANCOMBC)
 ```
 
+## 加载数据集
 
 ```{r}
 theme_set(theme_bw())
@@ -28,11 +30,6 @@ physeq <- rename_asv(physeq, prefix="ASV")
 
 ## 主导物种间的负相关共变主导群落组装
 
-在多个碳源条件下，群落结构均呈现出由两类主导菌属 *Klebsiella* 与 *Pseudomonas* —驱动的显著分化格局。随着初始细胞数的增加，*Klebsiella* 的相对丰度稳步上升，而 *Pseudomonas* 显著下降，表现出典型的“主导种交替”或“此消彼长”的动态关系。这种趋势在糖类种碳源条件下表现得尤为明显，表明其具有跨环境一致性。
-
-该现象提示两者之间可能存在激烈的资源竞争或生态位排斥，即它们在利用特定碳源或占据生态位方面存在高度重叠。此外，低细胞数条件下 *Pseudomonas* 的持续优势地位可能反映了其在资源匮乏或低密度环境中的适应优势，而随着群落复杂度增加（高细胞数），*Klebsiella* 可能凭借更强的群体感应能力或共生优势获得主导地位。
-
-
 ```{r}
 ps_genus = tax_glom(physeq, "Genus")
 ps_relabund = transform_sample_counts(ps_genus, function(x) x / sum(x, na.rm = TRUE))
@@ -40,7 +37,6 @@ df = psmelt(ps_relabund) |>
   as_tibble() |> 
   mutate(Genus = fct_relevel(fct_other(Genus, keep = names(top10_genus_colors)[1:7]), names(top10_genus_colors)))
 
-# 计算均值和标准误
 df_mod = df |> 
   group_by(carbon, cell_num, Genus) |> 
   summarise(
@@ -50,11 +46,8 @@ df_mod = df |>
     ymax = meanAbundance + se,
     .groups = "drop"
   )
-```
+}
 
-
-
-```{r}
 p = df_mod |> 
   ggplot(aes(cell_num, meanAbundance, group = Genus, color = Genus)) +
   geom_point(size = 2) +
@@ -72,6 +65,7 @@ p = df_mod |>
   )
 p
 ```
+
 ### 差异分析检验
 
 ```{r}
